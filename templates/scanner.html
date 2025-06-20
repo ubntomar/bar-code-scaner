@@ -12,7 +12,7 @@
     <div class="container">
         <!-- Header compacto -->
         <header class="header">
-            <h1>📱 Scanner Server</h1>
+            <h1>🔫 Scanner Pro</h1>
             <div class="status" id="status">
                 <span class="status-dot" id="statusDot"></span>
                 <span id="statusText">Conectando...</span>
@@ -33,8 +33,8 @@
 
         <!-- Contenedor principal -->
         <main class="main-content">
-            <!-- Video preview GRANDE para móviles -->
-            <div class="camera-container">
+            <!-- Video preview GRANDE con tap-to-focus -->
+            <div class="camera-container" id="cameraContainer">
                 <video id="video" autoplay playsinline muted style="display: none;"></video>
                 <canvas id="canvas" style="display: none;"></canvas>
                 
@@ -47,34 +47,47 @@
                     </div>
                 </div>
                 
-                <!-- Overlay para el marco de escaneo -->
+                <!-- Overlay para el marco de escaneo optimizado -->
                 <div class="scan-overlay" style="display: none;">
                     <div class="scan-frame">
                         <div class="corner top-left"></div>
                         <div class="corner top-right"></div>
                         <div class="corner bottom-left"></div>
                         <div class="corner bottom-right"></div>
+                        
+                        <!-- Punto de enfoque central -->
+                        <div class="focus-center" id="focusCenter"></div>
                     </div>
                 </div>
                 
-                <!-- Mensaje de instrucciones -->
+                <!-- Indicador de tap-to-focus -->
+                <div class="focus-indicator" id="focusIndicator" style="display: none;">
+                    <div class="focus-ring"></div>
+                </div>
+                
+                <!-- Mensaje de instrucciones optimizado -->
                 <div class="instructions" id="instructions">
                     👆 Presiona "Activar Cámara" para comenzar
                 </div>
+                
+                <!-- Instrucciones de enfoque -->
+                <div class="focus-hint" id="focusHint" style="display: none;">
+                    📍 Toca la pantalla para enfocar • Apunta y presiona ESCANEAR
+                </div>
             </div>
 
-            <!-- CONTROLES PRINCIPALES - MUY VISIBLES -->
+            <!-- CONTROLES PRINCIPALES - ESTILO PISTOLA LECTORA -->
             <div class="main-controls">
                 <button id="startCamera" class="btn btn-primary large">
                     📹 Activar Cámara
                 </button>
                 
-                <button id="scanBtn" class="btn btn-success large" disabled>
-                    🔍 ESCANEAR
+                <button id="scanBtn" class="btn btn-success large scanner-trigger" disabled>
+                    🎯 ESCANEAR
                 </button>
             </div>
 
-            <!-- CONTROLES ADICIONALES -->
+            <!-- CONTROLES ADICIONALES COMPACTOS -->
             <div class="secondary-controls">
                 <button id="prepareFocus" class="btn btn-outline" style="display: none;">
                     🎯 Preparar Foco
@@ -84,8 +97,12 @@
                     💡 Flash
                 </button>
                 
-                <button id="uploadBtn" class="btn btn-secondary">
-                    📁 Subir Foto
+                <button id="autoFocusBtn" class="btn btn-outline" style="display: none;">
+                    🔍 Auto-Enfoque
+                </button>
+                
+                <button id="uploadBtn" class="btn btn-secondary small">
+                    📁 Subir
                 </button>
                 
                 <button id="configToggle" class="btn btn-outline small">
@@ -121,6 +138,14 @@
                         <span>Sonido al escanear</span>
                     </label>
                     <label class="config-item">
+                        <input type="checkbox" id="continuousFocus" checked>
+                        <span>Enfoque continuo</span>
+                    </label>
+                    <label class="config-item">
+                        <input type="checkbox" id="tapToFocus" checked>
+                        <span>Tap para enfocar</span>
+                    </label>
+                    <label class="config-item">
                         <input type="checkbox" id="showDebug">
                         <span>Información de debug</span>
                     </label>
@@ -134,9 +159,9 @@
                     <div><strong>HTTPS:</strong> <span id="httpsStatus">-</span></div>
                     <div><strong>getUserMedia:</strong> <span id="getUserMediaStatus">-</span></div>
                     <div><strong>Navegador:</strong> <span id="browserInfo">-</span></div>
+                    <div><strong>Autofoque:</strong> <span id="autoFocusStatus">-</span></div>
+                    <div><strong>Último enfoque:</strong> <span id="lastFocusTime">-</span></div>
                     <div><strong>Gestión de foco:</strong> <span id="focusManagement">-</span></div>
-                    <div><strong>Ventana actual:</strong> <span id="currentWindow">-</span></div>
-                    <div><strong>Ventana recordada:</strong> <span id="rememberedWindow">-</span></div>
                 </div>
             </div>
         </main>
@@ -167,13 +192,18 @@
         let isFlashOn = false;
         let cameraAvailable = false;
         let audioContext = null;
+        let currentTrack = null;
+        let focusTimeout = null;
+        let lastFocusTime = null;
         
         // Configuración
         let config = {
             autoType: true,
             addEnter: true,
             showDebug: false,
-            playSound: true
+            playSound: true,
+            continuousFocus: true,
+            tapToFocus: true
         };
 
         // Inicialización
@@ -215,30 +245,30 @@
             if (!config.playSound || !audioContext) return;
             
             try {
-                // Crear beep exitoso (dos tonos ascendentes)
+                // Crear beep de pistola lectora (dos beeps rápidos)
                 const oscillator1 = audioContext.createOscillator();
                 const oscillator2 = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
                 
-                // Configurar primer tono (más alto)
+                // Primer beep más agudo (confirmación)
                 oscillator1.connect(gainNode);
-                oscillator1.frequency.setValueAtTime(800, audioContext.currentTime);
-                oscillator1.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1);
+                oscillator1.frequency.setValueAtTime(1200, audioContext.currentTime);
+                oscillator1.frequency.setValueAtTime(1000, audioContext.currentTime + 0.05);
                 
-                // Configurar segundo tono (más bajo)
+                // Segundo beep (éxito)
                 oscillator2.connect(gainNode);
-                oscillator2.frequency.setValueAtTime(600, audioContext.currentTime + 0.15);
-                oscillator2.frequency.setValueAtTime(800, audioContext.currentTime + 0.25);
+                oscillator2.frequency.setValueAtTime(800, audioContext.currentTime + 0.1);
+                oscillator2.frequency.setValueAtTime(600, audioContext.currentTime + 0.2);
                 
                 gainNode.connect(audioContext.destination);
-                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                gainNode.gain.setValueAtTime(0.12, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.25);
                 
                 oscillator1.start(audioContext.currentTime);
-                oscillator1.stop(audioContext.currentTime + 0.15);
+                oscillator1.stop(audioContext.currentTime + 0.08);
                 
-                oscillator2.start(audioContext.currentTime + 0.15);
-                oscillator2.stop(audioContext.currentTime + 0.3);
+                oscillator2.start(audioContext.currentTime + 0.1);
+                oscillator2.stop(audioContext.currentTime + 0.25);
                 
             } catch (error) {
                 console.warn('Error reproduciendo sonido de éxito:', error);
@@ -249,30 +279,20 @@
             if (!config.playSound || !audioContext) return;
             
             try {
-                // Crear sonido de error (dos tonos descendentes)
-                const oscillator1 = audioContext.createOscillator();
-                const oscillator2 = audioContext.createOscillator();
+                // Crear sonido de error tipo pistola (buzz)
+                const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
                 
-                // Configurar primer tono (descendente)
-                oscillator1.connect(gainNode);
-                oscillator1.frequency.setValueAtTime(600, audioContext.currentTime);
-                oscillator1.frequency.setValueAtTime(400, audioContext.currentTime + 0.15);
-                
-                // Configurar segundo tono (más descendente)
-                oscillator2.connect(gainNode);
-                oscillator2.frequency.setValueAtTime(400, audioContext.currentTime + 0.2);
-                oscillator2.frequency.setValueAtTime(200, audioContext.currentTime + 0.4);
+                oscillator.connect(gainNode);
+                oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
+                oscillator.frequency.setValueAtTime(150, audioContext.currentTime + 0.3);
                 
                 gainNode.connect(audioContext.destination);
                 gainNode.gain.setValueAtTime(0.08, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
                 
-                oscillator1.start(audioContext.currentTime);
-                oscillator1.stop(audioContext.currentTime + 0.2);
-                
-                oscillator2.start(audioContext.currentTime + 0.2);
-                oscillator2.stop(audioContext.currentTime + 0.5);
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.4);
                 
             } catch (error) {
                 console.warn('Error reproduciendo sonido de error:', error);
@@ -332,6 +352,7 @@
             document.getElementById('fileInput').addEventListener('change', handleFileUpload);
             document.getElementById('scanBtn').addEventListener('click', scanBarcode);
             document.getElementById('flashBtn').addEventListener('click', toggleFlash);
+            document.getElementById('autoFocusBtn').addEventListener('click', triggerAutoFocus);
             document.getElementById('copyResult').addEventListener('click', copyResult);
             
             // Configuración
@@ -339,6 +360,8 @@
             document.getElementById('autoType').addEventListener('change', updateConfig);
             document.getElementById('addEnter').addEventListener('change', updateConfig);
             document.getElementById('playSound').addEventListener('change', updateConfig);
+            document.getElementById('continuousFocus').addEventListener('change', updateConfig);
+            document.getElementById('tapToFocus').addEventListener('change', updateConfig);
             document.getElementById('showDebug').addEventListener('change', toggleDebug);
             
             // Eventos de video
@@ -346,6 +369,9 @@
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
             });
+
+            // TAP-TO-FOCUS en el contenedor de la cámara
+            document.getElementById('cameraContainer').addEventListener('click', handleTapToFocus);
 
             // Habilitar audio context con interacción del usuario
             document.addEventListener('click', function() {
@@ -371,35 +397,59 @@
             clearResults();
 
             try {
+                // CONFIGURACIONES OPTIMIZADAS PARA ESCANEO DE CÓDIGOS
                 const constraints = {
                     video: {
                         facingMode: 'environment',
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
+                        width: { ideal: 1920, min: 1280 },
+                        height: { ideal: 1080, min: 720 },
+                        // OPTIMIZACIONES DE AUTOFOQUE
+                        focusMode: 'continuous',
+                        focusDistance: { ideal: 0.3 }, // Distancia óptima para códigos (30cm)
+                        exposureMode: 'continuous',
+                        whiteBalanceMode: 'continuous',
+                        // Configuraciones adicionales para códigos
+                        frameRate: { ideal: 30, min: 15 },
+                        aspectRatio: { ideal: 16/9 }
                     }
                 };
 
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
                 
+                // Obtener track para controles avanzados
+                currentTrack = stream.getVideoTracks()[0];
+                
+                // Aplicar configuraciones avanzadas si están disponibles
+                await applyAdvancedCameraSettings();
+                
                 // Mostrar video
                 video.style.display = 'block';
                 document.getElementById('cameraPlaceholder').style.display = 'none';
                 document.querySelector('.scan-overlay').style.display = 'flex';
+                document.getElementById('focusHint').style.display = 'block';
                 
                 document.getElementById('startCamera').style.display = 'none';
                 document.getElementById('scanBtn').disabled = false;
                 document.getElementById('prepareFocus').style.display = 'inline-block';
+                document.getElementById('autoFocusBtn').style.display = 'inline-block';
                 document.getElementById('instructions').textContent = '🎯 Apunta al código y presiona ESCANEAR';
                 
                 // Mostrar botón de flash si está disponible
-                const track = stream.getVideoTracks()[0];
-                const capabilities = track.getCapabilities();
+                const capabilities = currentTrack.getCapabilities();
                 if (capabilities.torch) {
                     document.getElementById('flashBtn').style.display = 'inline-block';
                 }
                 
-                showToast('📹 Cámara activada', 'success');
+                // Verificar capacidades de autofoque
+                updateAutoFocusStatus(capabilities);
+                
+                // Activar enfoque automático en el centro
+                setTimeout(() => {
+                    focusAtCenter();
+                }, 1000);
+                
+                showToast('📹 Cámara optimizada activada', 'success');
                 
             } catch (error) {
                 console.error('Error accediendo a la cámara:', error);
@@ -416,6 +466,168 @@
                 playErrorSound();
                 showToast(`❌ ${errorMessage}`, 'error');
                 document.getElementById('instructions').textContent = '❌ ' + errorMessage;
+            }
+        }
+
+        async function applyAdvancedCameraSettings() {
+            if (!currentTrack) return;
+            
+            try {
+                const capabilities = currentTrack.getCapabilities();
+                const settings = {};
+                
+                // Configurar autofoque si está disponible
+                if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+                    settings.focusMode = 'continuous';
+                }
+                
+                // Configurar distancia de enfoque para códigos de barras
+                if (capabilities.focusDistance) {
+                    settings.focusDistance = 0.3; // 30cm - ideal para códigos
+                }
+                
+                // Configurar exposición automática
+                if (capabilities.exposureMode && capabilities.exposureMode.includes('continuous')) {
+                    settings.exposureMode = 'continuous';
+                }
+                
+                // Aplicar configuraciones
+                if (Object.keys(settings).length > 0) {
+                    await currentTrack.applyConstraints({ advanced: [settings] });
+                    console.log('✅ Configuraciones avanzadas aplicadas:', settings);
+                }
+                
+            } catch (error) {
+                console.warn('⚠️ No se pudieron aplicar configuraciones avanzadas:', error);
+            }
+        }
+
+        function updateAutoFocusStatus(capabilities) {
+            let status = 'Básico';
+            
+            if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+                status = 'Continuo disponible';
+            }
+            
+            if (capabilities.focusDistance) {
+                status += ' + Control distancia';
+            }
+            
+            document.getElementById('autoFocusStatus').textContent = status;
+        }
+
+        async function handleTapToFocus(event) {
+            if (!config.tapToFocus || !currentTrack || !stream) return;
+            
+            // Evitar que se active en botones
+            if (event.target.tagName === 'BUTTON') return;
+            
+            // Obtener coordenadas del toque
+            const rect = event.currentTarget.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            // Convertir a coordenadas relativas (0-1)
+            const relativeX = x / rect.width;
+            const relativeY = y / rect.height;
+            
+            // Mostrar indicador visual
+            showFocusIndicator(x, y);
+            
+            // Aplicar enfoque en el punto tocado
+            await focusAtPoint(relativeX, relativeY);
+            
+            // Actualizar tiempo de último enfoque
+            lastFocusTime = new Date().toLocaleTimeString();
+            document.getElementById('lastFocusTime').textContent = lastFocusTime;
+        }
+
+        function showFocusIndicator(x, y) {
+            const indicator = document.getElementById('focusIndicator');
+            
+            // Posicionar indicador
+            indicator.style.left = (x - 25) + 'px';
+            indicator.style.top = (y - 25) + 'px';
+            indicator.style.display = 'block';
+            
+            // Animar indicador
+            indicator.classList.add('focusing');
+            
+            // Ocultar después de 1 segundo
+            setTimeout(() => {
+                indicator.style.display = 'none';
+                indicator.classList.remove('focusing');
+            }, 1000);
+        }
+
+        async function focusAtPoint(x, y) {
+            if (!currentTrack) return;
+            
+            try {
+                const capabilities = currentTrack.getCapabilities();
+                
+                // Si soporta control de punto de enfoque
+                if (capabilities.pointsOfInterest) {
+                    await currentTrack.applyConstraints({
+                        advanced: [{
+                            pointsOfInterest: [{ x: x, y: y }]
+                        }]
+                    });
+                    console.log(`🎯 Enfoque aplicado en: ${x.toFixed(2)}, ${y.toFixed(2)}`);
+                } else {
+                    // Fallback: activar enfoque manual temporal
+                    await triggerAutoFocus();
+                }
+                
+            } catch (error) {
+                console.warn('⚠️ Error aplicando enfoque en punto:', error);
+                // Fallback a autofoque general
+                await triggerAutoFocus();
+            }
+        }
+
+        async function focusAtCenter() {
+            // Enfocar automáticamente en el centro del marco de escaneo
+            await focusAtPoint(0.5, 0.5);
+            
+            // Mostrar brevemente el indicador central
+            const centerElement = document.getElementById('focusCenter');
+            centerElement.classList.add('active');
+            
+            setTimeout(() => {
+                centerElement.classList.remove('active');
+            }, 800);
+        }
+
+        async function triggerAutoFocus() {
+            if (!currentTrack) return;
+            
+            try {
+                // Forzar reenfoque aplicando y removiendo constraint
+                await currentTrack.applyConstraints({
+                    advanced: [{
+                        focusMode: 'single-shot'
+                    }]
+                });
+                
+                // Volver a modo continuo después de un momento
+                setTimeout(async () => {
+                    try {
+                        await currentTrack.applyConstraints({
+                            advanced: [{
+                                focusMode: 'continuous'
+                            }]
+                        });
+                    } catch (e) {
+                        console.debug('Modo continuo no soportado');
+                    }
+                }, 500);
+                
+                showToast('🔍 Autofoque activado', 'info');
+                
+            } catch (error) {
+                console.warn('⚠️ Error con autofoque manual:', error);
+                showToast('⚠️ Autofoque no disponible', 'warning');
             }
         }
 
@@ -450,8 +662,7 @@
             if (!stream) return;
             
             try {
-                const track = stream.getVideoTracks()[0];
-                await track.applyConstraints({
+                await currentTrack.applyConstraints({
                     advanced: [{torch: !isFlashOn}]
                 });
                 
@@ -523,15 +734,22 @@
             // LIMPIAR resultados anteriores al iniciar nuevo escaneo
             clearResults();
             
+            // Activar enfoque antes del escaneo si está disponible
+            if (config.continuousFocus && currentTrack) {
+                await focusAtCenter();
+                // Pequeña pausa para que el enfoque se estabilice
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+            
             let imageData;
             
             if (video.style.display !== 'none' && video.videoWidth) {
                 // Escanear desde video
                 context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                imageData = canvas.toDataURL('image/jpeg', 0.8);
+                imageData = canvas.toDataURL('image/jpeg', 0.9); // Mayor calidad para códigos
             } else if (canvas.width > 0) {
                 // Escanear desde imagen cargada
-                imageData = canvas.toDataURL('image/jpeg', 0.8);
+                imageData = canvas.toDataURL('image/jpeg', 0.9);
             } else {
                 showToast('❌ No hay imagen para escanear', 'error');
                 playErrorSound();
@@ -568,7 +786,7 @@
                 if (result.success) {
                     const barcode = result.barcodes[0];
                     
-                    // Reproducir sonido de éxito
+                    // Reproducir sonido de éxito tipo pistola lectora
                     playBeepSound();
                     
                     // Mostrar SOLO el código actual
@@ -583,9 +801,14 @@
                     // LIMPIAR pantalla cuando no se encuentran códigos
                     clearResults();
                     
-                    // Reproducir sonido de error en caso de fallo
+                    // Reproducir sonido de error
                     playErrorSound();
                     showToast(`⚠️ ${result.message}`, 'warning');
+                    
+                    // Reactivar autofoque si falló
+                    if (currentTrack && config.continuousFocus) {
+                        setTimeout(triggerAutoFocus, 500);
+                    }
                 }
                 
             } catch (error) {
@@ -633,6 +856,8 @@
             config.autoType = document.getElementById('autoType').checked;
             config.addEnter = document.getElementById('addEnter').checked;
             config.playSound = document.getElementById('playSound').checked;
+            config.continuousFocus = document.getElementById('continuousFocus').checked;
+            config.tapToFocus = document.getElementById('tapToFocus').checked;
             
             fetch('/config', {
                 method: 'POST',
