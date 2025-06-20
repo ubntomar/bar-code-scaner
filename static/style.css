@@ -93,8 +93,8 @@ body {
 }
 
 .camera-container.compact {
-    min-height: 180px; /* Aún más compacto */
-    max-height: 220px;
+    min-height: 210px; /* Aumentado de 180px */
+    max-height: 250px; /* Aumentado de 220px */
 }
 
 /* Placeholder cuando no hay cámara */
@@ -340,7 +340,7 @@ body {
     color: white;
 }
 
-/* Resultados mejorados */
+/* Resultados simplificados - SOLO código */
 .results {
     background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
     border: 2px solid #bbf7d0;
@@ -348,49 +348,31 @@ body {
     padding: 1.25rem;
     margin: 0.75rem 0;
     box-shadow: 0 4px 15px rgba(187, 247, 208, 0.3);
+    text-align: center;
 }
 
 .results h3 {
     color: #059669;
     margin-bottom: 1rem;
     font-size: 1.1rem;
-    text-align: center;
 }
 
 .result-display {
-    text-align: center;
     margin-bottom: 1rem;
 }
 
 .result-code {
-    font-size: 1.4rem;
+    font-size: 1.6rem;
     font-weight: 700;
     color: #047857;
-    margin-bottom: 0.5rem;
-    padding: 0.75rem;
-    background: rgba(255, 255, 255, 0.8);
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.9);
     border-radius: 8px;
     word-break: break-all;
     border: 2px solid rgba(5, 150, 105, 0.2);
-}
-
-.result-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.85rem;
-    color: #059669;
-}
-
-.result-type {
-    font-weight: 600;
-    background: rgba(5, 150, 105, 0.1);
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-}
-
-.result-status {
-    font-style: italic;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
 }
 
 /* Configuración mejorada */
@@ -645,12 +627,8 @@ body {
     }
     
     .result-code {
-        font-size: 1.1rem;
-    }
-    
-    .result-meta {
-        flex-direction: column;
-        gap: 0.25rem;
+        font-size: 1.2rem;
+        padding: 0.75rem;
     }
 }
 
@@ -671,8 +649,8 @@ body {
     }
     
     .camera-container.compact {
-        min-height: 120px;
-        max-height: 160px;
+        min-height: 140px; /* Aumentado de 120px */
+        max-height: 180px; /* Aumentado de 160px */
     }
     
     .results {
