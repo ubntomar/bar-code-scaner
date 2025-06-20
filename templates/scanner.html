@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Scanner Server - Escaneo de Códigos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>📱 Scanner Server</h1>
+            <div class="status" id="status">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Conectando...</span>
+            </div>
+        </header>
+
+        <!-- Mensaje de seguridad HTTPS -->
+        <div class="security-warning" id="securityWarning" style="display: none;">
+            <h3>⚠️ Acceso a Cámara Limitado</h3>
+            <p>Los navegadores requieren HTTPS para acceder a la cámara.</p>
+            <p><strong>Opciones:</strong></p>
+            <ul>
+                <li>📱 Usar Chrome en Android (permite HTTP en red local)</li>
+                <li>🔒 Configurar HTTPS (avanzado)</li>
+                <li>📁 Subir foto desde galería (botón abajo)</li>
+            </ul>
+        </div>
+
+        <!-- Contenedor principal -->
+        <main class="main-content">
+            <!-- Video preview -->
+            <div class="camera-container">
+                <video id="video" autoplay playsinline muted style="display: none;"></video>
+                <canvas id="canvas" style="display: none;"></canvas>
+                
+                <!-- Placeholder cuando no hay cámara -->
+                <div class="camera-placeholder" id="cameraPlaceholder">
+                    <div class="placeholder-content">
+                        <div class="camera-icon">📷</div>
+                        <p>Cámara no disponible</p>
+                        <p class="placeholder-hint">Usa el botón "Subir Foto" para escanear desde galería</p>
+                    </div>
+                </div>
+                
+                <!-- Overlay para el marco de escaneo -->
+                <div class="scan-overlay" style="display: none;">
+                    <div class="scan-frame">
+                        <div class="corner top-left"></div>
+                        <div class="corner top-right"></div>
+                        <div class="corner bottom-left"></div>
+                        <div class="corner bottom-right"></div>
+                    </div>
+                </div>
+                
+                <!-- Mensaje de instrucciones -->
+                <div class="instructions" id="instructions">
+                    📷 Presiona "Activar Cámara" o "Subir Foto"
+                </div>
+            </div>
+
+            <!-- Controles -->
+            <div class="controls">
+                <button id="startCamera" class="btn btn-primary">
+                    📹 Activar Cámara
+                </button>
+                
+                <button id="uploadBtn" class="btn btn-secondary">
+                    📁 Subir Foto
+                </button>
+                
+                <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
+                
+                <button id="scanBtn" class="btn btn-success" disabled>
+                    🔍 Escanear
+                </button>
+                
+                <button id="flashBtn" class="btn btn-secondary" style="display: none;">
+                    💡 Flash
+                </button>
+            </div>
+
+            <!-- Resultados -->
+            <div class="results" id="results" style="display: none;">
+                <h3>📋 Último escaneo:</h3>
+                <div class="result-item">
+                    <strong>Tipo:</strong> <span id="resultType">-</span>
+                </div>
+                <div class="result-item">
+                    <strong>Código:</strong> <span id="resultCode">-</span>
+                </div>
+                <div class="result-item">
+                    <strong>Estado:</strong> <span id="resultStatus">-</span>
+                </div>
+            </div>
+
+            <!-- Debug info -->
+            <div class="debug-info" id="debugInfo" style="display: none;">
+                <h4>🔧 Información de depuración:</h4>
+                <p><strong>HTTPS:</strong> <span id="httpsStatus">-</span></p>
+                <p><strong>getUserMedia:</strong> <span id="getUserMediaStatus">-</span></p>
+                <p><strong>Navegador:</strong> <span id="browserInfo">-</span></p>
+            </div>
+
+            <!-- Configuración -->
+            <div class="config-section">
+                <button id="configToggle" class="btn btn-outline">
+                    ⚙️ Configuración
+                </button>
+                
+                <div class="config-panel" id="configPanel" style="display: none;">
+                    <div class="config-item">
+                        <label>
+                            <input type="checkbox" id="autoType" checked>
+                            Auto-escribir códigos
+                        </label>
+                    </div>
+                    <div class="config-item">
+                        <label>
+                            <input type="checkbox" id="addEnter" checked>
+                            Añadir Enter al final
+                        </label>
+                    </div>
+                    <div class="config-item">
+                        <label>
+                            <input type="checkbox" id="showDebug">
+                            Mostrar información de debug
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>🖥️ Servidor: <span id="serverInfo">Cargando...</span></p>
+            <p>📊 Escaneados: <span id="scanCount">0</span></p>
+        </footer>
+    </div>
+
+    <!-- Loading overlay -->
+    <div class="loading" id="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p>Procesando...</p>
+    </div>
+
+    <!-- Toast notifications -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // Variables globales
+        let video, canvas, context;
+        let stream = null;
+        let scanCount = 0;
+        let isFlashOn = false;
+        let cameraAvailable = false;
+        
+        // Configuración
+        let config = {
+            autoType: true,
+            addEnter: true,
+            showDebug: false
+        };
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeElements();
+            checkCapabilities();
+            checkServerStatus();
+            setupEventListeners();
+            loadConfiguration();
+        });
+
+        function initializeElements() {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            context = canvas.getContext('2d');
+        }
+
+        function checkCapabilities() {
+            // Verificar HTTPS
+            const isHTTPS = window.location.protocol === 'https:';
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            
+            document.getElementById('httpsStatus').textContent = isHTTPS ? 'Sí' : 'No';
+            
+            // Verificar getUserMedia
+            const hasGetUserMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+            document.getElementById('getUserMediaStatus').textContent = hasGetUserMedia ? 'Disponible' : 'No disponible';
+            
+            // Información del navegador
+            document.getElementById('browserInfo').textContent = navigator.userAgent.split(' ').slice(-2).join(' ');
+            
+            // Mostrar advertencia si no es HTTPS y no es localhost
+            if (!isHTTPS && !isLocalhost) {
+                document.getElementById('securityWarning').style.display = 'block';
+            }
+            
+            // Verificar si podemos usar la cámara
+            if (hasGetUserMedia && (isHTTPS || isLocalhost)) {
+                cameraAvailable = true;
+            } else {
+                // Mostrar placeholder
+                document.getElementById('cameraPlaceholder').style.display = 'flex';
+                document.getElementById('startCamera').disabled = true;
+                document.getElementById('startCamera').textContent = '❌ Cámara no disponible';
+            }
+        }
+
+        function setupEventListeners() {
+            // Botones principales
+            document.getElementById('startCamera').addEventListener('click', startCamera);
+            document.getElementById('uploadBtn').addEventListener('click', () => {
+                document.getElementById('fileInput').click();
+            });
+            document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+            document.getElementById('scanBtn').addEventListener('click', scanBarcode);
+            document.getElementById('flashBtn').addEventListener('click', toggleFlash);
+            
+            // Configuración
+            document.getElementById('configToggle').addEventListener('click', toggleConfig);
+            document.getElementById('autoType').addEventListener('change', updateConfig);
+            document.getElementById('addEnter').addEventListener('change', updateConfig);
+            document.getElementById('showDebug').addEventListener('change', toggleDebug);
+            
+            // Eventos de video
+            video.addEventListener('loadedmetadata', function() {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            });
+        }
+
+        async function startCamera() {
+            if (!cameraAvailable) {
+                showToast('❌ Cámara no disponible. Usa "Subir Foto"', 'error');
+                return;
+            }
+
+            try {
+                const constraints = {
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                };
+
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                
+                // Mostrar video
+                video.style.display = 'block';
+                document.getElementById('cameraPlaceholder').style.display = 'none';
+                document.querySelector('.scan-overlay').style.display = 'flex';
+                
+                document.getElementById('startCamera').style.display = 'none';
+                document.getElementById('scanBtn').disabled = false;
+                document.getElementById('instructions').textContent = '✅ Cámara activa - Apunta al código';
+                
+                // Mostrar botón de flash si está disponible
+                const track = stream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+                if (capabilities.torch) {
+                    document.getElementById('flashBtn').style.display = 'inline-block';
+                }
+                
+                showToast('📹 Cámara activada', 'success');
+                
+            } catch (error) {
+                console.error('Error accediendo a la cámara:', error);
+                
+                let errorMessage = 'Error accediendo a la cámara';
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = 'Permiso de cámara denegado';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = 'No se encontró cámara';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage = 'Cámara no soportada';
+                }
+                
+                showToast(`❌ ${errorMessage}`, 'error');
+                document.getElementById('instructions').textContent = '❌ ' + errorMessage;
+            }
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    // Dibujar imagen en canvas
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    context.drawImage(img, 0, 0);
+                    
+                    // Habilitar botón de escaneo
+                    document.getElementById('scanBtn').disabled = false;
+                    document.getElementById('instructions').textContent = '✅ Foto cargada - Presiona escanear';
+                    
+                    showToast('📁 Foto cargada correctamente', 'success');
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function toggleFlash() {
+            if (!stream) return;
+            
+            try {
+                const track = stream.getVideoTracks()[0];
+                await track.applyConstraints({
+                    advanced: [{torch: !isFlashOn}]
+                });
+                
+                isFlashOn = !isFlashOn;
+                document.getElementById('flashBtn').textContent = isFlashOn ? '🔆 Flash ON' : '💡 Flash OFF';
+                
+            } catch (error) {
+                console.error('Error controlando flash:', error);
+                showToast('❌ Flash no disponible', 'error');
+            }
+        }
+
+        async function scanBarcode() {
+            let imageData;
+            
+            if (video.style.display !== 'none' && video.videoWidth) {
+                // Escanear desde video
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                imageData = canvas.toDataURL('image/jpeg', 0.8);
+            } else if (canvas.width > 0) {
+                // Escanear desde imagen cargada
+                imageData = canvas.toDataURL('image/jpeg', 0.8);
+            } else {
+                showToast('❌ No hay imagen para escanear', 'error');
+                return;
+            }
+
+            document.getElementById('loading').style.display = 'flex';
+            
+            try {
+                const response = await fetch('/scan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        image: imageData
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    const barcode = result.barcodes[0];
+                    showResults(barcode, result.auto_typed);
+                    scanCount++;
+                    document.getElementById('scanCount').textContent = scanCount;
+                    showToast(`✅ ${result.message}`, 'success');
+                } else {
+                    showToast(`⚠️ ${result.message}`, 'warning');
+                }
+                
+            } catch (error) {
+                console.error('Error escaneando:', error);
+                showToast('❌ Error al escanear', 'error');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function showResults(barcode, autoTyped) {
+            document.getElementById('resultType').textContent = barcode.type;
+            document.getElementById('resultCode').textContent = barcode.data;
+            document.getElementById('resultStatus').textContent = autoTyped ? '✅ Escrito automáticamente' : '📋 Código detectado';
+            document.getElementById('results').style.display = 'block';
+        }
+
+        function toggleConfig() {
+            const panel = document.getElementById('configPanel');
+            const isVisible = panel.style.display !== 'none';
+            panel.style.display = isVisible ? 'none' : 'block';
+        }
+
+        function toggleDebug() {
+            const showDebug = document.getElementById('showDebug').checked;
+            document.getElementById('debugInfo').style.display = showDebug ? 'block' : 'none';
+        }
+
+        function updateConfig() {
+            config.autoType = document.getElementById('autoType').checked;
+            config.addEnter = document.getElementById('addEnter').checked;
+            
+            fetch('/config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    auto_type: config.autoType,
+                    add_enter: config.addEnter
+                })
+            });
+        }
+
+        async function loadConfiguration() {
+            try {
+                const response = await fetch('/config');
+                const serverConfig = await response.json();
+                
+                document.getElementById('autoType').checked = serverConfig.auto_type;
+                document.getElementById('addEnter').checked = serverConfig.add_enter;
+                
+            } catch (error) {
+                console.error('Error cargando configuración:', error);
+            }
+        }
+
+        async function checkServerStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                
+                updateStatus('online', 'Conectado');
+                document.getElementById('serverInfo').textContent = `${window.location.host}`;
+                
+            } catch (error) {
+                updateStatus('offline', 'Desconectado');
+                console.error('Error conectando al servidor:', error);
+            }
+        }
+
+        function updateStatus(status, text) {
+            const dot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            dot.className = `status-dot ${status}`;
+            statusText.textContent = text;
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast show ${type}`;
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Auto-reconexión
+        setInterval(checkServerStatus, 30000);
+    </script>
+</body>
+</html>

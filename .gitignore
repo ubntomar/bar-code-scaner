@@ -1,0 +1,252 @@
+# Scanner Server .gitignore
+# Proyecto de escaneo de códigos de barras con Python + Flask
+
+# ================================
+# ENTORNO VIRTUAL PYTHON
+# ================================
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# ================================
+# ARCHIVOS PYTHON
+# ================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ================================
+# CERTIFICADOS SSL
+# ================================
+ssl_certs/
+*.crt
+*.key
+*.pem
+*.p12
+*.pfx
+
+# ================================
+# ARCHIVOS DE BACKUP
+# ================================
+*_backup.py
+*_backup.*
+backup_*/
+*.bak
+*.backup
+
+# ================================
+# LOGS Y ARCHIVOS TEMPORALES
+# ================================
+*.log
+*.tmp
+*.temp
+/tmp/
+logs/
+debug.log
+error.log
+
+# ================================
+# ARCHIVOS DE CONFIGURACIÓN LOCAL
+# ================================
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+config.local.py
+local_settings.py
+
+# ================================
+# ARCHIVOS DEL SISTEMA OPERATIVO
+# ================================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ================================
+# IDEs Y EDITORES
+# ================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.swp
+*.swo
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ================================
+# ARCHIVOS ESPECÍFICOS DEL PROYECTO
+# ================================
+# Archivos de test temporal
+test_*.py
+debug_*.py
+temp_*.py
+
+# Imágenes de prueba
+test_images/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+sample_*
+
+# Base de datos local (si se implementa)
+*.db
+*.sqlite
+*.sqlite3
+
+# ================================
+# ARCHIVOS DE DEPENDENCIAS
+# ================================
+# pip-tools
+requirements-dev.txt
+requirements.local.txt
+
+# Pipenv
+Pipfile.lock
+
+# Poetry
+poetry.lock
+
+# ================================
+# ARCHIVOS DE DOCUMENTACIÓN TEMPORAL
+# ================================
+docs/_build/
+*.pdf
+*.docx
+*.odt
+
+# ================================
+# ARCHIVOS DE CACHE
+# ================================
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+
+# ================================
+# ARCHIVOS ESPECÍFICOS SCANNER SERVER
+# ================================
+# Configuración OpenSSL temporal
+openssl.conf
+
+# Scripts de instalación temporales
+install_*.sh
+setup_temp.sh
+
+# Archivos de estado
+.scanner_state
+.last_scan
+scanner.state
+
+# Archivos de configuración de usuario
+user_config.json
+scanner_config.local
+
+# ================================
+# ARCHIVOS DE RED Y SEGURIDAD
+# ================================
+# Archivos de configuración de red
+network_config.json
+server_config.local
+
+# Tokens y claves
+*.token
+*.secret
+api_keys.txt
+
+# ================================
+# OTROS ARCHIVOS TEMPORALES
+# ================================
+# Archivos de swap
+*.swp
+*.swo
+
+# Archivos de lock
+*.lock
+
+# Archivos de PID
+*.pid
+
+# Archivos de socket
+*.sock
+
+# Archivos de dump
+*.dump

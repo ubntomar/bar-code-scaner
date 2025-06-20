@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+"""
+Scanner Server HTTPS - Servidor seguro para acceso completo a cámara móvil
+Compatible con Ubuntu y Windows
+"""
+
+from flask import Flask, render_template, request, jsonify
+import base64
+import io
+from PIL import Image
+import threading
+import time
+import socket
+import ssl
+import os
+from datetime import datetime, timedelta
+
+# Importar módulos locales
+from scanner import BarcodeScanner
+from keyboard_sim import KeyboardSimulator
+
+app = Flask(__name__)
+
+# Inicializar componentes
+scanner = BarcodeScanner()
+keyboard = KeyboardSimulator()
+
+# Configuración
+CONFIG = {
+    'host': '0.0.0.0',
+    'port': 5000,
+    'https_port': 5443,
+    'debug': False,
+    'auto_type': True,
+    'add_enter': True,
+    'use_https': True
+}
+
+def create_self_signed_cert():
+    """Crear certificado autofirmado para HTTPS"""
+    try:
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import serialization, hashes
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        import ipaddress
+        
+        print("🔐 Creando certificado SSL autofirmado...")
+        
+        # Generar clave privada
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+        )
+        
+        # Obtener IP local
+        local_ip = get_local_ip()
+        
+        # Crear certificado
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "CO"),
+            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Meta"),
+            x509.NameAttribute(NameOID.LOCALITY_NAME, "Castilla La Nueva"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Scanner Server"),
+            x509.NameAttribute(NameOID.COMMON_NAME, local_ip),
+        ])
+        
+        cert = x509.CertificateBuilder().subject_name(
+            subject
+        ).issuer_name(
+            issuer
+        ).public_key(
+            private_key.public_key()
+        ).serial_number(
+            x509.random_serial_number()
+        ).not_valid_before(
+            datetime.utcnow()
+        ).not_valid_after(
+            datetime.utcnow() + timedelta(days=365)
+        ).add_extension(
+            x509.SubjectAlternativeName([
+                x509.DNSName("localhost"),
+                x509.DNSName("scanner-server.local"),
+                x509.IPAddress(ipaddress.ip_address(local_ip)),
+                x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+            ]),
+            critical=False,
+        ).sign(private_key, hashes.SHA256())
+        
+        # Guardar certificado y clave
+        cert_dir = "ssl_certs"
+        os.makedirs(cert_dir, exist_ok=True)
+        
+        cert_path = os.path.join(cert_dir, "server.crt")
+        key_path = os.path.join(cert_dir, "server.key")
+        
+        with open(cert_path, "wb") as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+        
+        with open(key_path, "wb") as f:
+            f.write(private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+        
+        print(f"✅ Certificado creado: {cert_path}")
+        print(f"✅ Clave privada creada: {key_path}")
+        
+        return cert_path, key_path
+        
+    except ImportError:
+        print("⚠️ cryptography no instalada. Usando certificado básico...")
+        return create_basic_cert()
+    except Exception as e:
+        print(f"❌ Error creando certificado: {e}")
+        return create_basic_cert()
+
+def create_basic_cert():
+    """Crear certificado básico usando OpenSSL"""
+    try:
+        cert_dir = "ssl_certs"
+        os.makedirs(cert_dir, exist_ok=True)
+        
+        cert_path = os.path.join(cert_dir, "server.crt")
+        key_path = os.path.join(cert_dir, "server.key")
+        
+        local_ip = get_local_ip()
+        
+        # Comando OpenSSL para crear certificado
+        openssl_cmd = f"""
+openssl req -x509 -newkey rsa:4096 -keyout {key_path} -out {cert_path} \
+-days 365 -nodes -subj "/C=CO/ST=Meta/L=Castilla/O=ScannerServer/CN={local_ip}" \
+-addext "subjectAltName=DNS:localhost,IP:{local_ip},IP:127.0.0.1"
+"""
+        
+        import subprocess
+        result = subprocess.run(openssl_cmd, shell=True, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print("✅ Certificado creado con OpenSSL")
+            return cert_path, key_path
+        else:
+            print(f"❌ Error con OpenSSL: {result.stderr}")
+            return None, None
+            
+    except Exception as e:
+        print(f"❌ Error creando certificado básico: {e}")
+        return None, None
+
+def get_local_ip():
+    """Obtener la IP local para mostrar al usuario"""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except:
+        return "192.168.1.100"
+
+@app.route('/')
+def index():
+    """Página principal con interfaz de escaneo"""
+    return render_template('scanner.html')
+
+@app.route('/scan', methods=['POST'])
+def scan_barcode():
+    """Endpoint para procesar imágenes y extraer códigos de barras"""
+    try:
+        data = request.get_json()
+        
+        if 'image' not in data:
+            return jsonify({'error': 'No se encontró imagen en la petición'}), 400
+        
+        # Decodificar imagen base64
+        image_data = data['image'].split(',')[1]
+        image_bytes = base64.b64decode(image_data)
+        
+        # Convertir a PIL Image
+        image = Image.open(io.BytesIO(image_bytes))
+        
+        # Escanear códigos de barras
+        barcodes = scanner.scan_image(image)
+        
+        if not barcodes:
+            return jsonify({
+                'success': False,
+                'message': 'No se encontraron códigos de barras',
+                'barcodes': []
+            })
+        
+        # Procesar el primer código encontrado
+        barcode_data = barcodes[0]
+        code_value = barcode_data['data']
+        code_type = barcode_data['type']
+        
+        # Auto-escribir si está habilitado
+        if CONFIG['auto_type']:
+            def type_code():
+                time.sleep(0.1)
+                keyboard.type_text(code_value)
+                if CONFIG['add_enter']:
+                    keyboard.press_enter()
+            
+            threading.Thread(target=type_code, daemon=True).start()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Código {code_type} escaneado correctamente',
+            'barcodes': barcodes,
+            'auto_typed': CONFIG['auto_type']
+        })
+        
+    except Exception as e:
+        print(f"Error al procesar imagen: {str(e)}")
+        return jsonify({'error': f'Error al procesar imagen: {str(e)}'}), 500
+
+@app.route('/config', methods=['GET', 'POST'])
+def config():
+    """Endpoint para configuración del servidor"""
+    if request.method == 'GET':
+        return jsonify(CONFIG)
+    
+    elif request.method == 'POST':
+        data = request.get_json()
+        for key, value in data.items():
+            if key in CONFIG:
+                CONFIG[key] = value
+        return jsonify({'success': True, 'config': CONFIG})
+
+@app.route('/status')
+def status():
+    """Estado del servidor"""
+    return jsonify({
+        'status': 'running',
+        'scanner_ready': scanner.is_ready(),
+        'keyboard_ready': keyboard.is_ready(),
+        'https_enabled': CONFIG['use_https'],
+        'config': CONFIG
+    })
+
+def install_certificate_instructions(cert_path, local_ip, https_port):
+    """Mostrar instrucciones para instalar certificado"""
+    print("\n" + "="*60)
+    print("📱 INSTRUCCIONES PARA USAR LA CÁMARA EN MÓVIL")
+    print("="*60)
+    print(f"""
+1️⃣  ACCEDE A LA URL HTTPS:
+   https://{local_ip}:{https_port}
+
+2️⃣  EL NAVEGADOR MOSTRARÁ "NO SEGURO":
+   - Chrome: Presiona "Avanzado" → "Ir a {local_ip} (no seguro)"
+   - Firefox: Presiona "Avanzado" → "Aceptar el riesgo y continuar"
+   - Safari: Presiona "Detalles" → "Visitar este sitio web"
+
+3️⃣  PERMITIR CÁMARA:
+   - El navegador preguntará sobre permisos de cámara
+   - Presiona "Permitir" o "Allow"
+
+4️⃣  ¡LISTO! Ahora puedes usar la cámara normalmente
+
+⚠️  IMPORTANTE:
+   - Esto es un certificado autofirmado (seguro pero no verificado)
+   - Solo funciona en tu red local
+   - El navegador puede mostrar advertencias (es normal)
+""")
+    print("="*60)
+
+def run_dual_server():
+    """Ejecutar servidor HTTP y HTTPS simultáneamente"""
+    local_ip = get_local_ip()
+    
+    if CONFIG['use_https']:
+        # Crear certificados SSL
+        cert_path, key_path = create_self_signed_cert()
+        
+        if cert_path and key_path:
+            print("🚀 SCANNER SERVER HTTPS INICIADO")
+            print("="*50)
+            print(f"🔒 HTTPS (con cámara): https://{local_ip}:{CONFIG['https_port']}")
+            print(f"🌐 HTTP (sin cámara):  http://{local_ip}:{CONFIG['port']}")
+            print("="*50)
+            
+            # Mostrar instrucciones
+            install_certificate_instructions(cert_path, local_ip, CONFIG['https_port'])
+            
+            # Ejecutar servidor HTTPS en hilo separado
+            def run_https():
+                context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                context.load_cert_chain(cert_path, key_path)
+                app.run(
+                    host=CONFIG['host'],
+                    port=CONFIG['https_port'],
+                    debug=CONFIG['debug'],
+                    ssl_context=context,
+                    threaded=True
+                )
+            
+            https_thread = threading.Thread(target=run_https)
+            https_thread.daemon = True
+            https_thread.start()
+            
+            print("✅ Servidor HTTPS iniciado")
+            print("⚙️ También iniciando servidor HTTP como respaldo...")
+    
+    # Servidor HTTP (respaldo)
+    print(f"🌐 Servidor HTTP iniciado en: http://{local_ip}:{CONFIG['port']}")
+    app.run(
+        host=CONFIG['host'],
+        port=CONFIG['port'],
+        debug=CONFIG['debug']
+    )
+
+if __name__ == '__main__':
+    try:
+        run_dual_server()
+    except KeyboardInterrupt:
+        print("\n👋 Cerrando servidor...")
+    except Exception as e:
+        print(f"\n❌ Error ejecutando servidor: {e}")
+        print("💡 Intentando solo HTTP...")
+        CONFIG['use_https'] = False
+        local_ip = get_local_ip()
+        print(f"🌐 Servidor HTTP: http://{local_ip}:{CONFIG['port']}")
+        app.run(host=CONFIG['host'], port=CONFIG['port'], debug=CONFIG['debug'])

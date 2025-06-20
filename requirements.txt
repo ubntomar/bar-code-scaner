@@ -1,0 +1,7 @@
+flask==2.3.3
+pyzbar==0.1.9
+pynput==1.7.6
+pillow==10.0.1
+requests==2.31.0
+cryptography>=3.4.8
+pyopenssl>=21.0.0
