@@ -8,7 +8,7 @@
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
+        <!-- Header compacto -->
         <header class="header">
             <h1>📱 Scanner Server</h1>
             <div class="status" id="status">
@@ -31,8 +31,8 @@
 
         <!-- Contenedor principal -->
         <main class="main-content">
-            <!-- Video preview -->
-            <div class="camera-container">
+            <!-- Video preview COMPACTO -->
+            <div class="camera-container compact">
                 <video id="video" autoplay playsinline muted style="display: none;"></video>
                 <canvas id="canvas" style="display: none;"></canvas>
                 
@@ -41,7 +41,7 @@
                     <div class="placeholder-content">
                         <div class="camera-icon">📷</div>
                         <p>Cámara no disponible</p>
-                        <p class="placeholder-hint">Usa el botón "Subir Foto" para escanear desde galería</p>
+                        <p class="placeholder-hint">Usa "Subir Foto" para escanear desde galería</p>
                     </div>
                 </div>
                 
@@ -57,24 +57,22 @@
                 
                 <!-- Mensaje de instrucciones -->
                 <div class="instructions" id="instructions">
-                    📷 Presiona "Activar Cámara" o "Subir Foto"
+                    👆 Presiona "Activar Cámara" para comenzar
                 </div>
             </div>
 
-            <!-- Controles -->
-            <div class="controls">
-                <button id="startCamera" class="btn btn-primary">
+            <!-- CONTROLES PRINCIPALES (más prominentes) -->
+            <div class="main-controls">
+                <button id="startCamera" class="btn btn-primary large">
                     📹 Activar Cámara
                 </button>
                 
-                <button id="uploadBtn" class="btn btn-secondary">
-                    📁 Subir Foto
+                <button id="scanBtn" class="btn btn-success large" disabled>
+                    🔍 ESCANEAR
                 </button>
                 
-                <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
-                
-                <button id="scanBtn" class="btn btn-success" disabled>
-                    🔍 Escanear
+                <button id="prepareFocus" class="btn btn-outline" style="display: none;">
+                    🎯 Preparar Foco
                 </button>
                 
                 <button id="flashBtn" class="btn btn-secondary" style="display: none;">
@@ -82,61 +80,75 @@
                 </button>
             </div>
 
-            <!-- Resultados -->
+            <!-- Resultados (más prominentes) -->
             <div class="results" id="results" style="display: none;">
-                <h3>📋 Último escaneo:</h3>
-                <div class="result-item">
-                    <strong>Tipo:</strong> <span id="resultType">-</span>
+                <h3>✅ Código Escaneado:</h3>
+                <div class="result-display">
+                    <div class="result-code" id="resultCode">-</div>
+                    <div class="result-meta">
+                        <span class="result-type" id="resultType">-</span>
+                        <span class="result-status" id="resultStatus">-</span>
+                    </div>
                 </div>
-                <div class="result-item">
-                    <strong>Código:</strong> <span id="resultCode">-</span>
-                </div>
-                <div class="result-item">
-                    <strong>Estado:</strong> <span id="resultStatus">-</span>
-                </div>
+                <button id="copyResult" class="btn btn-outline small">📋 Copiar</button>
             </div>
 
-            <!-- Debug info -->
-            <div class="debug-info" id="debugInfo" style="display: none;">
-                <h4>🔧 Información de depuración:</h4>
-                <p><strong>HTTPS:</strong> <span id="httpsStatus">-</span></p>
-                <p><strong>getUserMedia:</strong> <span id="getUserMediaStatus">-</span></p>
-                <p><strong>Navegador:</strong> <span id="browserInfo">-</span></p>
-            </div>
-
-            <!-- Configuración -->
-            <div class="config-section">
+            <!-- CONTROLES SECUNDARIOS (menos prominentes) -->
+            <div class="secondary-controls">
+                <button id="uploadBtn" class="btn btn-secondary">
+                    📁 Subir Foto
+                </button>
+                
+                <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
+                
                 <button id="configToggle" class="btn btn-outline">
                     ⚙️ Configuración
                 </button>
-                
-                <div class="config-panel" id="configPanel" style="display: none;">
-                    <div class="config-item">
-                        <label>
-                            <input type="checkbox" id="autoType" checked>
-                            Auto-escribir códigos
-                        </label>
-                    </div>
-                    <div class="config-item">
-                        <label>
-                            <input type="checkbox" id="addEnter" checked>
-                            Añadir Enter al final
-                        </label>
-                    </div>
-                    <div class="config-item">
-                        <label>
-                            <input type="checkbox" id="showDebug">
-                            Mostrar información de debug
-                        </label>
-                    </div>
+            </div>
+
+            <!-- Configuración (colapsable) -->
+            <div class="config-panel" id="configPanel" style="display: none;">
+                <h4>⚙️ Configuración</h4>
+                <div class="config-grid">
+                    <label class="config-item">
+                        <input type="checkbox" id="autoType" checked>
+                        <span>Auto-escribir códigos</span>
+                    </label>
+                    <label class="config-item">
+                        <input type="checkbox" id="addEnter" checked>
+                        <span>Añadir Enter al final</span>
+                    </label>
+                    <label class="config-item">
+                        <input type="checkbox" id="playSound" checked>
+                        <span>Sonido al escanear</span>
+                    </label>
+                    <label class="config-item">
+                        <input type="checkbox" id="showDebug">
+                        <span>Información de debug</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Debug info (colapsable) -->
+            <div class="debug-info" id="debugInfo" style="display: none;">
+                <h4>🔧 Información de depuración:</h4>
+                <div class="debug-grid">
+                    <div><strong>HTTPS:</strong> <span id="httpsStatus">-</span></div>
+                    <div><strong>getUserMedia:</strong> <span id="getUserMediaStatus">-</span></div>
+                    <div><strong>Navegador:</strong> <span id="browserInfo">-</span></div>
+                    <div><strong>Gestión de foco:</strong> <span id="focusManagement">-</span></div>
+                    <div><strong>Ventana actual:</strong> <span id="currentWindow">-</span></div>
+                    <div><strong>Ventana recordada:</strong> <span id="rememberedWindow">-</span></div>
                 </div>
             </div>
         </main>
 
-        <!-- Footer -->
+        <!-- Footer compacto -->
         <footer class="footer">
-            <p>🖥️ Servidor: <span id="serverInfo">Cargando...</span></p>
-            <p>📊 Escaneados: <span id="scanCount">0</span></p>
+            <div class="footer-stats">
+                <span>📊 Escaneados: <strong id="scanCount">0</strong></span>
+                <span>🖥️ <span id="serverInfo">Cargando...</span></span>
+            </div>
         </footer>
     </div>
 
@@ -156,27 +168,76 @@
         let scanCount = 0;
         let isFlashOn = false;
         let cameraAvailable = false;
+        let audioContext = null;
         
         // Configuración
         let config = {
             autoType: true,
             addEnter: true,
-            showDebug: false
+            showDebug: false,
+            playSound: true
         };
 
         // Inicialización
         document.addEventListener('DOMContentLoaded', function() {
             initializeElements();
+            initializeAudio();
             checkCapabilities();
             checkServerStatus();
             setupEventListeners();
             loadConfiguration();
+            
+            // Actualizar información de ventanas después de un momento
+            setTimeout(updateWindowInfo, 1000);
         });
 
         function initializeElements() {
             video = document.getElementById('video');
             canvas = document.getElementById('canvas');
             context = canvas.getContext('2d');
+        }
+
+        function initializeAudio() {
+            // Inicializar contexto de audio para el beep
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (error) {
+                console.warn('Web Audio API no soportada:', error);
+            }
+        }
+
+        function playBeepSound() {
+            if (!config.playSound || !audioContext) return;
+            
+            try {
+                // Crear beep exitoso (dos tonos)
+                const oscillator1 = audioContext.createOscillator();
+                const oscillator2 = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                // Configurar primer tono (más alto)
+                oscillator1.connect(gainNode);
+                oscillator1.frequency.setValueAtTime(800, audioContext.currentTime);
+                oscillator1.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1);
+                
+                // Configurar segundo tono (más bajo)
+                oscillator2.connect(gainNode);
+                oscillator2.frequency.setValueAtTime(600, audioContext.currentTime + 0.15);
+                oscillator2.frequency.setValueAtTime(800, audioContext.currentTime + 0.25);
+                
+                gainNode.connect(audioContext.destination);
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                
+                oscillator1.start(audioContext.currentTime);
+                oscillator1.stop(audioContext.currentTime + 0.15);
+                
+                oscillator2.start(audioContext.currentTime + 0.15);
+                oscillator2.stop(audioContext.currentTime + 0.3);
+                
+            } catch (error) {
+                console.warn('Error reproduciendo sonido:', error);
+            }
         }
 
         function checkCapabilities() {
@@ -205,12 +266,13 @@
                 // Mostrar placeholder
                 document.getElementById('cameraPlaceholder').style.display = 'flex';
                 document.getElementById('startCamera').disabled = true;
-                document.getElementById('startCamera').textContent = '❌ Cámara no disponible';
+                document.getElementById('startCamera').innerHTML = '❌ Cámara no disponible';
             }
         }
 
         function setupEventListeners() {
             // Botones principales
+            document.getElementById('prepareFocus').addEventListener('click', prepareFocus);
             document.getElementById('startCamera').addEventListener('click', startCamera);
             document.getElementById('uploadBtn').addEventListener('click', () => {
                 document.getElementById('fileInput').click();
@@ -218,11 +280,13 @@
             document.getElementById('fileInput').addEventListener('change', handleFileUpload);
             document.getElementById('scanBtn').addEventListener('click', scanBarcode);
             document.getElementById('flashBtn').addEventListener('click', toggleFlash);
+            document.getElementById('copyResult').addEventListener('click', copyResult);
             
             // Configuración
             document.getElementById('configToggle').addEventListener('click', toggleConfig);
             document.getElementById('autoType').addEventListener('change', updateConfig);
             document.getElementById('addEnter').addEventListener('change', updateConfig);
+            document.getElementById('playSound').addEventListener('change', updateConfig);
             document.getElementById('showDebug').addEventListener('change', toggleDebug);
             
             // Eventos de video
@@ -230,6 +294,13 @@
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
             });
+
+            // Habilitar audio context con interacción del usuario
+            document.addEventListener('click', function() {
+                if (audioContext && audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+            }, { once: true });
         }
 
         async function startCamera() {
@@ -257,7 +328,8 @@
                 
                 document.getElementById('startCamera').style.display = 'none';
                 document.getElementById('scanBtn').disabled = false;
-                document.getElementById('instructions').textContent = '✅ Cámara activa - Apunta al código';
+                document.getElementById('prepareFocus').style.display = 'inline-block';
+                document.getElementById('instructions').textContent = '🎯 Apunta al código y presiona ESCANEAR';
                 
                 // Mostrar botón de flash si está disponible
                 const track = stream.getVideoTracks()[0];
@@ -300,7 +372,7 @@
                     
                     // Habilitar botón de escaneo
                     document.getElementById('scanBtn').disabled = false;
-                    document.getElementById('instructions').textContent = '✅ Foto cargada - Presiona escanear';
+                    document.getElementById('instructions').textContent = '✅ Foto cargada - Presiona ESCANEAR';
                     
                     showToast('📁 Foto cargada correctamente', 'success');
                 };
@@ -327,6 +399,61 @@
             }
         }
 
+        async function prepareFocus() {
+            try {
+                showToast('🎯 Preparando foco...', 'info');
+                
+                const response = await fetch('/prepare-focus', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    const windowName = result.current_window ? result.current_window.name : 'Desconocida';
+                    showToast(`✅ Foco preparado: ${windowName}`, 'success');
+                    
+                    // Actualizar info de debug
+                    if (result.current_window) {
+                        document.getElementById('currentWindow').textContent = windowName;
+                        document.getElementById('rememberedWindow').textContent = windowName;
+                    }
+                } else {
+                    showToast('⚠️ No se pudo preparar el foco', 'warning');
+                }
+                
+                // Actualizar información de ventanas
+                updateWindowInfo();
+                
+            } catch (error) {
+                console.error('Error preparando foco:', error);
+                showToast('❌ Error preparando foco', 'error');
+            }
+        }
+
+        async function updateWindowInfo() {
+            try {
+                const response = await fetch('/window-info');
+                const data = await response.json();
+                
+                if (data.current_window) {
+                    document.getElementById('currentWindow').textContent = data.current_window.name || 'Desconocida';
+                }
+                
+                document.getElementById('rememberedWindow').textContent = 
+                    data.remembered_window ? 'Configurada' : 'No configurada';
+                    
+                document.getElementById('focusManagement').textContent = 
+                    data.focus_management_available ? 'Disponible' : 'No disponible';
+                
+            } catch (error) {
+                console.debug('Error obteniendo info de ventanas:', error);
+            }
+        }
+
         async function scanBarcode() {
             let imageData;
             
@@ -340,6 +467,18 @@
             } else {
                 showToast('❌ No hay imagen para escanear', 'error');
                 return;
+            }
+
+            // Preparar foco automáticamente antes del escaneo
+            if (config.autoType) {
+                try {
+                    await fetch('/prepare-focus', { 
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                } catch (error) {
+                    console.debug('No se pudo preparar foco automáticamente:', error);
+                }
             }
 
             document.getElementById('loading').style.display = 'flex';
@@ -359,10 +498,17 @@
                 
                 if (result.success) {
                     const barcode = result.barcodes[0];
-                    showResults(barcode, result.auto_typed);
+                    
+                    // Reproducir sonido de éxito
+                    playBeepSound();
+                    
+                    showResults(barcode, result.auto_typed, result.focus_managed);
                     scanCount++;
                     document.getElementById('scanCount').textContent = scanCount;
                     showToast(`✅ ${result.message}`, 'success');
+                    
+                    // Actualizar información de ventanas después del escaneo
+                    setTimeout(updateWindowInfo, 1000);
                 } else {
                     showToast(`⚠️ ${result.message}`, 'warning');
                 }
@@ -375,11 +521,31 @@
             }
         }
 
-        function showResults(barcode, autoTyped) {
+        function showResults(barcode, autoTyped, focusManaged) {
             document.getElementById('resultType').textContent = barcode.type;
             document.getElementById('resultCode').textContent = barcode.data;
-            document.getElementById('resultStatus').textContent = autoTyped ? '✅ Escrito automáticamente' : '📋 Código detectado';
+            
+            let statusText = '';
+            if (autoTyped) {
+                statusText = focusManaged ? 
+                    '✅ Escrito con foco inteligente' : 
+                    '✅ Escrito automáticamente';
+            } else {
+                statusText = '📋 Código detectado';
+            }
+            
+            document.getElementById('resultStatus').textContent = statusText;
             document.getElementById('results').style.display = 'block';
+        }
+
+        async function copyResult() {
+            try {
+                const resultCode = document.getElementById('resultCode').textContent;
+                await navigator.clipboard.writeText(resultCode);
+                showToast('📋 Código copiado al portapapeles', 'success');
+            } catch (error) {
+                showToast('❌ Error copiando al portapapeles', 'error');
+            }
         }
 
         function toggleConfig() {
@@ -396,6 +562,7 @@
         function updateConfig() {
             config.autoType = document.getElementById('autoType').checked;
             config.addEnter = document.getElementById('addEnter').checked;
+            config.playSound = document.getElementById('playSound').checked;
             
             fetch('/config', {
                 method: 'POST',
@@ -429,6 +596,15 @@
                 
                 updateStatus('online', 'Conectado');
                 document.getElementById('serverInfo').textContent = `${window.location.host}`;
+                
+                // Actualizar información de gestión de foco si está disponible
+                if (data.keyboard_status && data.keyboard_status.focus_management) {
+                    document.getElementById('focusManagement').textContent = 'Disponible';
+                    // Actualizar información de ventanas
+                    updateWindowInfo();
+                } else {
+                    document.getElementById('focusManagement').textContent = 'No disponible';
+                }
                 
             } catch (error) {
                 updateStatus('offline', 'Desconectado');
