@@ -80,15 +80,11 @@
                 </button>
             </div>
 
-            <!-- Resultados (más prominentes) -->
+            <!-- Resultado Simplificado -->
             <div class="results" id="results" style="display: none;">
                 <h3>✅ Código Escaneado:</h3>
                 <div class="result-display">
                     <div class="result-code" id="resultCode">-</div>
-                    <div class="result-meta">
-                        <span class="result-type" id="resultType">-</span>
-                        <span class="result-status" id="resultStatus">-</span>
-                    </div>
                 </div>
                 <button id="copyResult" class="btn btn-outline small">📋 Copiar</button>
             </div>
@@ -210,7 +206,7 @@
             if (!config.playSound || !audioContext) return;
             
             try {
-                // Crear beep exitoso (dos tonos)
+                // Crear beep exitoso (dos tonos ascendentes)
                 const oscillator1 = audioContext.createOscillator();
                 const oscillator2 = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
@@ -236,8 +232,48 @@
                 oscillator2.stop(audioContext.currentTime + 0.3);
                 
             } catch (error) {
-                console.warn('Error reproduciendo sonido:', error);
+                console.warn('Error reproduciendo sonido de éxito:', error);
             }
+        }
+
+        function playErrorSound() {
+            if (!config.playSound || !audioContext) return;
+            
+            try {
+                // Crear sonido de error (dos tonos descendentes)
+                const oscillator1 = audioContext.createOscillator();
+                const oscillator2 = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                // Configurar primer tono (descendente)
+                oscillator1.connect(gainNode);
+                oscillator1.frequency.setValueAtTime(600, audioContext.currentTime);
+                oscillator1.frequency.setValueAtTime(400, audioContext.currentTime + 0.15);
+                
+                // Configurar segundo tono (más descendente)
+                oscillator2.connect(gainNode);
+                oscillator2.frequency.setValueAtTime(400, audioContext.currentTime + 0.2);
+                oscillator2.frequency.setValueAtTime(200, audioContext.currentTime + 0.4);
+                
+                gainNode.connect(audioContext.destination);
+                gainNode.gain.setValueAtTime(0.08, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator1.start(audioContext.currentTime);
+                oscillator1.stop(audioContext.currentTime + 0.2);
+                
+                oscillator2.start(audioContext.currentTime + 0.2);
+                oscillator2.stop(audioContext.currentTime + 0.5);
+                
+            } catch (error) {
+                console.warn('Error reproduciendo sonido de error:', error);
+            }
+        }
+
+        function clearResults() {
+            // Limpiar/ocultar resultados anteriores
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('resultCode').textContent = '-';
         }
 
         function checkCapabilities() {
@@ -306,8 +342,12 @@
         async function startCamera() {
             if (!cameraAvailable) {
                 showToast('❌ Cámara no disponible. Usa "Subir Foto"', 'error');
+                playErrorSound(); // Sonido de error
                 return;
             }
+
+            // Limpiar resultados anteriores al activar cámara
+            clearResults();
 
             try {
                 const constraints = {
@@ -352,6 +392,7 @@
                     errorMessage = 'Cámara no soportada';
                 }
                 
+                playErrorSound(); // Sonido de error
                 showToast(`❌ ${errorMessage}`, 'error');
                 document.getElementById('instructions').textContent = '❌ ' + errorMessage;
             }
@@ -360,6 +401,9 @@
         function handleFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
+
+            // Limpiar resultados anteriores al cargar nueva foto
+            clearResults();
 
             const reader = new FileReader();
             reader.onload = function(e) {
@@ -455,6 +499,9 @@
         }
 
         async function scanBarcode() {
+            // LIMPIAR resultados anteriores al iniciar nuevo escaneo
+            clearResults();
+            
             let imageData;
             
             if (video.style.display !== 'none' && video.videoWidth) {
@@ -466,6 +513,7 @@
                 imageData = canvas.toDataURL('image/jpeg', 0.8);
             } else {
                 showToast('❌ No hay imagen para escanear', 'error');
+                playErrorSound(); // Sonido de error
                 return;
             }
 
@@ -502,7 +550,8 @@
                     // Reproducir sonido de éxito
                     playBeepSound();
                     
-                    showResults(barcode, result.auto_typed, result.focus_managed);
+                    // Mostrar SOLO el código actual (sin registros antiguos)
+                    showResults(barcode.data);
                     scanCount++;
                     document.getElementById('scanCount').textContent = scanCount;
                     showToast(`✅ ${result.message}`, 'success');
@@ -510,31 +559,31 @@
                     // Actualizar información de ventanas después del escaneo
                     setTimeout(updateWindowInfo, 1000);
                 } else {
+                    // LIMPIAR pantalla cuando no se encuentran códigos
+                    clearResults();
+                    
+                    // Reproducir sonido de error en caso de fallo
+                    playErrorSound();
                     showToast(`⚠️ ${result.message}`, 'warning');
                 }
                 
             } catch (error) {
                 console.error('Error escaneando:', error);
+                
+                // LIMPIAR pantalla en caso de error de conexión
+                clearResults();
+                
+                // Reproducir sonido de error
+                playErrorSound();
                 showToast('❌ Error al escanear', 'error');
             } finally {
                 document.getElementById('loading').style.display = 'none';
             }
         }
 
-        function showResults(barcode, autoTyped, focusManaged) {
-            document.getElementById('resultType').textContent = barcode.type;
-            document.getElementById('resultCode').textContent = barcode.data;
-            
-            let statusText = '';
-            if (autoTyped) {
-                statusText = focusManaged ? 
-                    '✅ Escrito con foco inteligente' : 
-                    '✅ Escrito automáticamente';
-            } else {
-                statusText = '📋 Código detectado';
-            }
-            
-            document.getElementById('resultStatus').textContent = statusText;
+        function showResults(codeValue) {
+            // Mostrar SOLO el código escaneado
+            document.getElementById('resultCode').textContent = codeValue;
             document.getElementById('results').style.display = 'block';
         }
 
