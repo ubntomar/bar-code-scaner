@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Scanner Server HTTPS - Servidor seguro SOLO HTTPS para acceso completo a cámara móvil
-Compatible con Ubuntu y Windows - Sin soporte HTTP
+Compatible con Ubuntu y Windows - Con gestión inteligente de foco de ventanas
 """
 
 from flask import Flask, render_template, request, jsonify
@@ -196,10 +196,21 @@ def scan_barcode():
         # Auto-escribir si está habilitado
         if CONFIG['auto_type']:
             def type_code():
-                time.sleep(0.1)
-                keyboard.type_text(code_value)
-                if CONFIG['add_enter']:
+                # Pequeña pausa para que la respuesta llegue al navegador
+                time.sleep(0.2)
+                
+                # Usar el workflow completo con gestión de foco
+                success = keyboard.scan_and_type_workflow(code_value)
+                
+                if CONFIG['add_enter'] and success:
+                    # Pequeña pausa antes del Enter
+                    time.sleep(0.1)
                     keyboard.press_enter()
+                
+                if success:
+                    print(f"✅ Código {code_type} escrito correctamente: {code_value}")
+                else:
+                    print(f"⚠️ Problemas escribiendo código: {code_value}")
             
             threading.Thread(target=type_code, daemon=True).start()
         
@@ -207,7 +218,8 @@ def scan_barcode():
             'success': True,
             'message': f'Código {code_type} escaneado correctamente',
             'barcodes': barcodes,
-            'auto_typed': CONFIG['auto_type']
+            'auto_typed': CONFIG['auto_type'],
+            'focus_managed': keyboard.get_status().get('focus_management', False)
         })
         
     except Exception as e:
@@ -235,8 +247,47 @@ def status():
         'scanner_ready': scanner.is_ready(),
         'keyboard_ready': keyboard.is_ready(),
         'server_type': 'HTTPS only',
-        'config': CONFIG
+        'config': CONFIG,
+        'keyboard_status': keyboard.get_status()
     })
+
+@app.route('/prepare-focus', methods=['POST'])
+def prepare_focus():
+    """Preparar el sistema recordando la ventana activa actual"""
+    try:
+        success = keyboard.remember_active_window()
+        status = keyboard.get_status()
+        
+        return jsonify({
+            'success': success,
+            'message': 'Ventana activa recordada' if success else 'No se pudo recordar ventana',
+            'current_window': status.get('current_window'),
+            'focus_management_available': status.get('focus_management', False)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/window-info')
+def window_info():
+    """Obtener información de la ventana actualmente activa"""
+    try:
+        current_window = keyboard.get_current_window_info()
+        status = keyboard.get_status()
+        
+        return jsonify({
+            'current_window': current_window,
+            'remembered_window': status.get('remembered_window'),
+            'focus_management_available': status.get('focus_management', False)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e)
+        }), 500
 
 def install_certificate_instructions(cert_path, local_ip, https_port):
     """Mostrar instrucciones para instalar certificado"""
@@ -263,6 +314,11 @@ def install_certificate_instructions(cert_path, local_ip, https_port):
    - Solo funciona en tu red local
    - El navegador puede mostrar advertencias (es normal)
    - Se requiere HTTPS para acceso completo a la cámara móvil
+
+🎯  NUEVA FUNCIÓN - GESTIÓN INTELIGENTE DE FOCO:
+   - El sistema recordará automáticamente dónde tienes el cursor
+   - Los códigos se escribirán en tu editor, no en Firefox
+   - También puedes usar el botón "🎯 Preparar Foco" manualmente
 """)
     print("="*60)
 
@@ -278,10 +334,11 @@ def run_https_server():
         print("💡 Solución: Ejecuta primero ./setup_https.sh")
         return
     
-    print("🚀 SCANNER SERVER HTTPS INICIADO")
-    print("="*50)
+    print("🚀 SCANNER SERVER HTTPS CON GESTIÓN DE FOCO INICIADO")
+    print("="*60)
     print(f"🔒 URL del servidor: https://{local_ip}:{CONFIG['https_port']}")
-    print("="*50)
+    print("🎯 Nueva función: Gestión inteligente de foco de ventanas")
+    print("="*60)
     
     # Mostrar instrucciones
     install_certificate_instructions(cert_path, local_ip, CONFIG['https_port'])
@@ -292,6 +349,7 @@ def run_https_server():
         context.load_cert_chain(cert_path, key_path)
         
         print("✅ Certificados SSL cargados correctamente")
+        print("🎯 Sistema de foco inteligente activado")
         print("🌐 Servidor iniciando...")
         print(f"📱 Accede desde tu móvil: https://{local_ip}:{CONFIG['https_port']}")
         print("\n⏹️  Presiona Ctrl+C para detener")
