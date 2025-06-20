@@ -2,9 +2,11 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Scanner Server - Escaneo de Códigos</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Scanner Server - Móvil</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Prevenir zoom en inputs en iOS -->
+    <meta name="format-detection" content="telephone=no">
 </head>
 <body>
     <div class="container">
@@ -17,7 +19,7 @@
             </div>
         </header>
 
-        <!-- Mensaje de seguridad HTTPS -->
+        <!-- Mensaje de seguridad HTTPS (solo si es necesario) -->
         <div class="security-warning" id="securityWarning" style="display: none;">
             <h3>⚠️ Acceso a Cámara Limitado</h3>
             <p>Los navegadores requieren HTTPS para acceder a la cámara.</p>
@@ -31,8 +33,8 @@
 
         <!-- Contenedor principal -->
         <main class="main-content">
-            <!-- Video preview COMPACTO -->
-            <div class="camera-container compact">
+            <!-- Video preview GRANDE para móviles -->
+            <div class="camera-container">
                 <video id="video" autoplay playsinline muted style="display: none;"></video>
                 <canvas id="canvas" style="display: none;"></canvas>
                 
@@ -61,7 +63,7 @@
                 </div>
             </div>
 
-            <!-- CONTROLES PRINCIPALES (más prominentes) -->
+            <!-- CONTROLES PRINCIPALES - MUY VISIBLES -->
             <div class="main-controls">
                 <button id="startCamera" class="btn btn-primary large">
                     📹 Activar Cámara
@@ -70,7 +72,10 @@
                 <button id="scanBtn" class="btn btn-success large" disabled>
                     🔍 ESCANEAR
                 </button>
-                
+            </div>
+
+            <!-- CONTROLES ADICIONALES -->
+            <div class="secondary-controls">
                 <button id="prepareFocus" class="btn btn-outline" style="display: none;">
                     🎯 Preparar Foco
                 </button>
@@ -78,7 +83,17 @@
                 <button id="flashBtn" class="btn btn-secondary" style="display: none;">
                     💡 Flash
                 </button>
+                
+                <button id="uploadBtn" class="btn btn-secondary">
+                    📁 Subir Foto
+                </button>
+                
+                <button id="configToggle" class="btn btn-outline small">
+                    ⚙️ Config
+                </button>
             </div>
+
+            <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
 
             <!-- Resultado Simplificado -->
             <div class="results" id="results" style="display: none;">
@@ -87,19 +102,6 @@
                     <div class="result-code" id="resultCode">-</div>
                 </div>
                 <button id="copyResult" class="btn btn-outline small">📋 Copiar</button>
-            </div>
-
-            <!-- CONTROLES SECUNDARIOS (menos prominentes) -->
-            <div class="secondary-controls">
-                <button id="uploadBtn" class="btn btn-secondary">
-                    📁 Subir Foto
-                </button>
-                
-                <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
-                
-                <button id="configToggle" class="btn btn-outline">
-                    ⚙️ Configuración
-                </button>
             </div>
 
             <!-- Configuración (colapsable) -->
@@ -182,6 +184,13 @@
             checkServerStatus();
             setupEventListeners();
             loadConfiguration();
+            
+            // Prevenir zoom en iOS al tocar inputs
+            document.addEventListener('touchstart', function(e) {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') {
+                    e.target.style.fontSize = '16px';
+                }
+            });
             
             // Actualizar información de ventanas después de un momento
             setTimeout(updateWindowInfo, 1000);
@@ -287,8 +296,15 @@
             const hasGetUserMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
             document.getElementById('getUserMediaStatus').textContent = hasGetUserMedia ? 'Disponible' : 'No disponible';
             
-            // Información del navegador
-            document.getElementById('browserInfo').textContent = navigator.userAgent.split(' ').slice(-2).join(' ');
+            // Información del navegador simplificada para móviles
+            const userAgent = navigator.userAgent;
+            let browserInfo = 'Desconocido';
+            if (userAgent.includes('Chrome')) browserInfo = 'Chrome';
+            else if (userAgent.includes('Firefox')) browserInfo = 'Firefox';
+            else if (userAgent.includes('Safari')) browserInfo = 'Safari';
+            else if (userAgent.includes('Edge')) browserInfo = 'Edge';
+            
+            document.getElementById('browserInfo').textContent = browserInfo;
             
             // Mostrar advertencia si no es HTTPS y no es localhost
             if (!isHTTPS && !isLocalhost) {
@@ -337,12 +353,17 @@
                     audioContext.resume();
                 }
             }, { once: true });
+
+            // Prevenir zoom en iOS
+            document.addEventListener('gesturestart', function (e) {
+                e.preventDefault();
+            });
         }
 
         async function startCamera() {
             if (!cameraAvailable) {
                 showToast('❌ Cámara no disponible. Usa "Subir Foto"', 'error');
-                playErrorSound(); // Sonido de error
+                playErrorSound();
                 return;
             }
 
@@ -392,7 +413,7 @@
                     errorMessage = 'Cámara no soportada';
                 }
                 
-                playErrorSound(); // Sonido de error
+                playErrorSound();
                 showToast(`❌ ${errorMessage}`, 'error');
                 document.getElementById('instructions').textContent = '❌ ' + errorMessage;
             }
@@ -513,7 +534,7 @@
                 imageData = canvas.toDataURL('image/jpeg', 0.8);
             } else {
                 showToast('❌ No hay imagen para escanear', 'error');
-                playErrorSound(); // Sonido de error
+                playErrorSound();
                 return;
             }
 
@@ -550,7 +571,7 @@
                     // Reproducir sonido de éxito
                     playBeepSound();
                     
-                    // Mostrar SOLO el código actual (sin registros antiguos)
+                    // Mostrar SOLO el código actual
                     showResults(barcode.data);
                     scanCount++;
                     document.getElementById('scanCount').textContent = scanCount;
@@ -649,7 +670,6 @@
                 // Actualizar información de gestión de foco si está disponible
                 if (data.keyboard_status && data.keyboard_status.focus_management) {
                     document.getElementById('focusManagement').textContent = 'Disponible';
-                    // Actualizar información de ventanas
                     updateWindowInfo();
                 } else {
                     document.getElementById('focusManagement').textContent = 'No disponible';
