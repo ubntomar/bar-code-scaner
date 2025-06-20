@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Scanner Server HTTPS - Servidor seguro para acceso completo a cámara móvil
-Compatible con Ubuntu y Windows
+Scanner Server HTTPS - Servidor seguro SOLO HTTPS para acceso completo a cámara móvil
+Compatible con Ubuntu y Windows - Sin soporte HTTP
 """
 
 from flask import Flask, render_template, request, jsonify
@@ -28,12 +28,10 @@ keyboard = KeyboardSimulator()
 # Configuración
 CONFIG = {
     'host': '0.0.0.0',
-    'port': 5000,
     'https_port': 5443,
     'debug': False,
     'auto_type': True,
-    'add_enter': True,
-    'use_https': True
+    'add_enter': True
 }
 
 def create_self_signed_cert():
@@ -236,7 +234,7 @@ def status():
         'status': 'running',
         'scanner_ready': scanner.is_ready(),
         'keyboard_ready': keyboard.is_ready(),
-        'https_enabled': CONFIG['use_https'],
+        'server_type': 'HTTPS only',
         'config': CONFIG
     })
 
@@ -264,63 +262,60 @@ def install_certificate_instructions(cert_path, local_ip, https_port):
    - Esto es un certificado autofirmado (seguro pero no verificado)
    - Solo funciona en tu red local
    - El navegador puede mostrar advertencias (es normal)
+   - Se requiere HTTPS para acceso completo a la cámara móvil
 """)
     print("="*60)
 
-def run_dual_server():
-    """Ejecutar servidor HTTP y HTTPS simultáneamente"""
+def run_https_server():
+    """Ejecutar servidor HTTPS solamente"""
     local_ip = get_local_ip()
     
-    if CONFIG['use_https']:
-        # Crear certificados SSL
-        cert_path, key_path = create_self_signed_cert()
-        
-        if cert_path and key_path:
-            print("🚀 SCANNER SERVER HTTPS INICIADO")
-            print("="*50)
-            print(f"🔒 HTTPS (con cámara): https://{local_ip}:{CONFIG['https_port']}")
-            print(f"🌐 HTTP (sin cámara):  http://{local_ip}:{CONFIG['port']}")
-            print("="*50)
-            
-            # Mostrar instrucciones
-            install_certificate_instructions(cert_path, local_ip, CONFIG['https_port'])
-            
-            # Ejecutar servidor HTTPS en hilo separado
-            def run_https():
-                context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-                context.load_cert_chain(cert_path, key_path)
-                app.run(
-                    host=CONFIG['host'],
-                    port=CONFIG['https_port'],
-                    debug=CONFIG['debug'],
-                    ssl_context=context,
-                    threaded=True
-                )
-            
-            https_thread = threading.Thread(target=run_https)
-            https_thread.daemon = True
-            https_thread.start()
-            
-            print("✅ Servidor HTTPS iniciado")
-            print("⚙️ También iniciando servidor HTTP como respaldo...")
+    # Crear certificados SSL
+    cert_path, key_path = create_self_signed_cert()
     
-    # Servidor HTTP (respaldo)
-    print(f"🌐 Servidor HTTP iniciado en: http://{local_ip}:{CONFIG['port']}")
-    app.run(
-        host=CONFIG['host'],
-        port=CONFIG['port'],
-        debug=CONFIG['debug']
-    )
+    if not cert_path or not key_path:
+        print("\n❌ ERROR: No se pudieron crear los certificados SSL")
+        print("💡 Solución: Ejecuta primero ./setup_https.sh")
+        return
+    
+    print("🚀 SCANNER SERVER HTTPS INICIADO")
+    print("="*50)
+    print(f"🔒 URL del servidor: https://{local_ip}:{CONFIG['https_port']}")
+    print("="*50)
+    
+    # Mostrar instrucciones
+    install_certificate_instructions(cert_path, local_ip, CONFIG['https_port'])
+    
+    # Ejecutar servidor HTTPS
+    try:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(cert_path, key_path)
+        
+        print("✅ Certificados SSL cargados correctamente")
+        print("🌐 Servidor iniciando...")
+        print(f"📱 Accede desde tu móvil: https://{local_ip}:{CONFIG['https_port']}")
+        print("\n⏹️  Presiona Ctrl+C para detener")
+        
+        app.run(
+            host=CONFIG['host'],
+            port=CONFIG['https_port'],
+            debug=CONFIG['debug'],
+            ssl_context=context,
+            threaded=True
+        )
+        
+    except Exception as e:
+        print(f"\n❌ Error iniciando servidor HTTPS: {e}")
+        print("💡 Verifica que el puerto 5443 esté libre")
 
 if __name__ == '__main__':
     try:
-        run_dual_server()
+        run_https_server()
     except KeyboardInterrupt:
-        print("\n👋 Cerrando servidor...")
+        print("\n👋 Cerrando servidor HTTPS...")
     except Exception as e:
         print(f"\n❌ Error ejecutando servidor: {e}")
-        print("💡 Intentando solo HTTP...")
-        CONFIG['use_https'] = False
-        local_ip = get_local_ip()
-        print(f"🌐 Servidor HTTP: http://{local_ip}:{CONFIG['port']}")
-        app.run(host=CONFIG['host'], port=CONFIG['port'], debug=CONFIG['debug'])
+        print("💡 Verifica:")
+        print("   1. Que los certificados SSL estén creados")
+        print("   2. Que el puerto 5443 esté libre")
+        print("   3. Ejecutar ./setup_https.sh si es necesario")
