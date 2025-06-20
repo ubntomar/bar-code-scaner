@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Simulador de teclado multiplataforma - VERSIÓN CORREGIDA
-Compatible con Ubuntu y Windows - Maneja permisos y configuración
+Simulador de teclado multiplataforma - VERSIÓN CON GESTIÓN INTELIGENTE DE FOCO
+Compatible con Ubuntu y Windows - Maneja permisos, configuración y foco de ventanas
 """
 
 import time
@@ -12,7 +12,7 @@ import os
 from pynput.keyboard import Key, Controller
 
 class KeyboardSimulator:
-    """Clase para simular entrada de teclado"""
+    """Clase para simular entrada de teclado con gestión inteligente de foco"""
     
     def __init__(self):
         """Inicializar el simulador de teclado"""
@@ -30,7 +30,13 @@ class KeyboardSimulator:
             'capitalize': False,     # Convertir a mayúsculas
             'add_prefix': '',        # Prefijo antes del código
             'add_suffix': '',        # Sufijo después del código
+            'remember_window': True, # Recordar ventana activa
+            'focus_delay': 0.8,      # Delay después de enfocar ventana
         }
+        
+        # Variables para gestión de foco
+        self.remembered_window = None
+        self.last_active_window = None
         
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
@@ -85,6 +91,130 @@ class KeyboardSimulator:
             self.logger.error(self.last_error)
             self.ready = False
     
+    def remember_active_window(self):
+        """Recordar la ventana activa antes del escaneo"""
+        if not self.config['remember_window']:
+            return True
+            
+        if self.system == "Linux":
+            try:
+                # Obtener ID de ventana activa
+                result = subprocess.run(['xdotool', 'getwindowfocus'], 
+                                      capture_output=True, text=True, timeout=2)
+                if result.returncode == 0:
+                    window_id = result.stdout.strip()
+                    
+                    # Obtener nombre de la ventana para debug
+                    try:
+                        name_result = subprocess.run(['xdotool', 'getwindowname', window_id],
+                                                   capture_output=True, text=True, timeout=1)
+                        window_name = name_result.stdout.strip() if name_result.returncode == 0 else "Desconocida"
+                    except:
+                        window_name = "Desconocida"
+                    
+                    self.remembered_window = window_id
+                    self.logger.info(f"🎯 Ventana activa recordada: {window_name} (ID: {window_id})")
+                    return True
+                else:
+                    self.logger.warning(f"No se pudo obtener ventana activa: {result.stderr}")
+                    return False
+                    
+            except subprocess.TimeoutExpired:
+                self.logger.warning("Timeout obteniendo ventana activa")
+                return False
+            except Exception as e:
+                self.logger.warning(f"Error recordando ventana: {e}")
+                return False
+        
+        # En Windows o sin xdotool, no podemos hacer nada
+        return True
+    
+    def focus_remembered_window(self):
+        """Enfocar la ventana que estaba activa antes del escaneo"""
+        if not self.config['remember_window'] or not self.remembered_window:
+            return True
+            
+        if self.system == "Linux":
+            try:
+                # Verificar que la ventana aún existe
+                check_result = subprocess.run(['xdotool', 'getwindowname', self.remembered_window],
+                                            capture_output=True, text=True, timeout=2)
+                
+                if check_result.returncode != 0:
+                    self.logger.warning("La ventana recordada ya no existe")
+                    return False
+                
+                # Enfocar la ventana recordada
+                focus_result = subprocess.run(['xdotool', 'windowfocus', self.remembered_window],
+                                            capture_output=True, text=True, timeout=2)
+                
+                if focus_result.returncode == 0:
+                    window_name = check_result.stdout.strip()
+                    self.logger.info(f"✅ Foco restaurado a: {window_name}")
+                    
+                    # Esperar que la ventana se active completamente
+                    time.sleep(self.config['focus_delay'])
+                    
+                    # Verificar que efectivamente está activa
+                    verify_result = subprocess.run(['xdotool', 'getwindowfocus'],
+                                                 capture_output=True, text=True, timeout=1)
+                    if verify_result.returncode == 0:
+                        current_window = verify_result.stdout.strip()
+                        if current_window == self.remembered_window:
+                            self.logger.info("🎯 Foco verificado correctamente")
+                            return True
+                        else:
+                            self.logger.warning("El foco no se estableció correctamente")
+                            return False
+                    
+                    return True
+                else:
+                    self.logger.warning(f"Error enfocando ventana: {focus_result.stderr}")
+                    return False
+                    
+            except subprocess.TimeoutExpired:
+                self.logger.warning("Timeout enfocando ventana")
+                return False
+            except Exception as e:
+                self.logger.warning(f"Error enfocando ventana recordada: {e}")
+                return False
+        
+        return True
+    
+    def get_current_window_info(self):
+        """Obtener información de la ventana actualmente activa"""
+        if self.system == "Linux":
+            try:
+                # ID de ventana
+                id_result = subprocess.run(['xdotool', 'getwindowfocus'],
+                                         capture_output=True, text=True, timeout=1)
+                if id_result.returncode != 0:
+                    return None
+                
+                window_id = id_result.stdout.strip()
+                
+                # Nombre de ventana
+                name_result = subprocess.run(['xdotool', 'getwindowname', window_id],
+                                           capture_output=True, text=True, timeout=1)
+                window_name = name_result.stdout.strip() if name_result.returncode == 0 else "Desconocida"
+                
+                # Clase de ventana
+                class_result = subprocess.run(['xdotool', 'getwindowclassname', window_id],
+                                            capture_output=True, text=True, timeout=1)
+                window_class = class_result.stdout.strip() if class_result.returncode == 0 else "Desconocida"
+                
+                return {
+                    'id': window_id,
+                    'name': window_name,
+                    'class': window_class
+                }
+                
+            except Exception as e:
+                self.logger.debug(f"Error obteniendo info de ventana: {e}")
+                return None
+        
+        return None
+    
     def is_ready(self):
         """Verificar si el simulador está listo"""
         return self.ready
@@ -93,8 +223,8 @@ class KeyboardSimulator:
         """Obtener último error"""
         return self.last_error
     
-    def type_text(self, text, focus_delay=None):
-        """Escribir texto simulando teclado"""
+    def type_text(self, text, focus_delay=None, restore_focus=True):
+        """Escribir texto simulando teclado con gestión inteligente de foco"""
         if not self.ready:
             self.logger.error(f"Simulador no está listo: {self.last_error}")
             return False
@@ -104,10 +234,22 @@ class KeyboardSimulator:
                 self.logger.warning("Texto vacío, no se escribirá nada")
                 return False
             
-            # Delay antes de escribir para que el usuario pueda cambiar el foco
+            # Log del estado inicial
+            current_window = self.get_current_window_info()
+            if current_window:
+                self.logger.info(f"Ventana actual antes de escribir: {current_window['name']}")
+            
+            # Restaurar foco a la ventana recordada si se solicita
+            if restore_focus and self.remembered_window:
+                focus_success = self.focus_remembered_window()
+                if not focus_success:
+                    self.logger.warning("No se pudo restaurar el foco, escribiendo en ventana actual")
+            
+            # Delay antes de escribir (si no se restauró foco o como tiempo adicional)
             delay = focus_delay if focus_delay is not None else self.config['before_type_delay']
-            self.logger.info(f"Esperando {delay} segundos para cambiar foco...")
-            time.sleep(delay)
+            if not restore_focus or not self.remembered_window:
+                self.logger.info(f"Esperando {delay} segundos para cambiar foco manualmente...")
+                time.sleep(delay)
             
             # Aplicar transformaciones de configuración
             final_text = self.config['add_prefix'] + text + self.config['add_suffix']
@@ -117,15 +259,10 @@ class KeyboardSimulator:
             
             self.logger.info(f"Escribiendo: '{final_text}'")
             
-            # Intentar enfocar ventana activa primero
-            try:
-                if self.system == "Linux":
-                    # Simular Alt+Tab para asegurar que hay una ventana activa
-                    subprocess.run(['xdotool', 'key', 'alt+Tab'], 
-                                 capture_output=True, timeout=1)
-                    time.sleep(0.1)
-            except:
-                pass  # No es crítico si falla
+            # Verificar ventana final antes de escribir
+            final_window = self.get_current_window_info()
+            if final_window:
+                self.logger.info(f"Escribiendo en ventana: {final_window['name']}")
             
             # Escribir caracter por caracter
             success_count = 0
@@ -308,10 +445,39 @@ Si tienes problemas, intenta:
     
     def get_status(self):
         """Obtener estado completo del simulador"""
+        current_window = self.get_current_window_info()
+        
         return {
             'ready': self.ready,
             'system': self.system,
             'last_error': self.last_error,
             'config': self.config,
-            'display': os.environ.get('DISPLAY', 'N/A') if self.system == "Linux" else 'N/A'
+            'display': os.environ.get('DISPLAY', 'N/A') if self.system == "Linux" else 'N/A',
+            'remembered_window': self.remembered_window,
+            'current_window': current_window,
+            'focus_management': self.system == "Linux" and self.config['remember_window']
         }
+    
+    def scan_and_type_workflow(self, text):
+        """Workflow completo: recordar ventana, escribir código y restaurar foco"""
+        try:
+            self.logger.info("🚀 Iniciando workflow completo de escaneo y escritura")
+            
+            # Paso 1: Recordar ventana activa actual
+            remember_success = self.remember_active_window()
+            if not remember_success:
+                self.logger.warning("No se pudo recordar la ventana activa")
+            
+            # Paso 2: Escribir el texto con restauración automática de foco
+            type_success = self.type_text(text, restore_focus=True)
+            
+            if type_success:
+                self.logger.info("✅ Workflow completado exitosamente")
+            else:
+                self.logger.warning("⚠️ Workflow completado con errores")
+            
+            return type_success
+            
+        except Exception as e:
+            self.logger.error(f"Error en workflow completo: {e}")
+            return False
