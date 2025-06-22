@@ -131,7 +131,7 @@ class ImageDatabase:
     
     
 
-    def get_recent_codes(self, limit=20, include_images=False):
+    def get_recent_codes(self, limit=200, include_images=False):
         """Obtener códigos recientes con opción de incluir imágenes"""
         try:
             with sqlite3.connect(self.db_path) as conn:

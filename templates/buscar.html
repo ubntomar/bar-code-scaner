@@ -652,7 +652,7 @@
             
             try {
                 // Solicitar códigos recientes CON IMÁGENES
-                const response = await fetch('/api/recientes?limit=15&include_images=true');
+                const response = await fetch('/api/recientes?limit=200&include_images=true');
                 const codes = await response.json();
                 
                 if (codes.length === 0) {
