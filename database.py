@@ -129,32 +129,71 @@ class ImageDatabase:
                 'error': str(e)
             }
     
-    def get_recent_codes(self, limit=20):
-        """Obtener códigos recientes"""
+    
+
+    def get_recent_codes(self, limit=20, include_images=False):
+        """Obtener códigos recientes con opción de incluir imágenes"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                cursor.execute('''
-                    SELECT codigo, timestamp, tamaño_kb, dispositivo
-                    FROM codigos_imagenes 
-                    ORDER BY timestamp DESC 
-                    LIMIT ?
-                ''', (limit,))
-                
-                results = cursor.fetchall()
-                
-                return [{
-                    'codigo': row[0],
-                    'timestamp': row[1],
-                    'tamaño_kb': row[2],
-                    'dispositivo': row[3]
-                } for row in results]
-                
+                if include_images:
+                    # Incluir imágenes para vista previa
+                    cursor.execute('''
+                        SELECT codigo, timestamp, tamaño_kb, dispositivo, imagen_blob
+                        FROM codigos_imagenes 
+                        ORDER BY timestamp DESC 
+                        LIMIT ?
+                    ''', (limit,))
+                    
+                    results = cursor.fetchall()
+                    
+                    return [{
+                        'codigo': row[0],
+                        'timestamp': row[1],
+                        'tamaño_kb': row[2],
+                        'dispositivo': row[3],
+                        'imagen_miniatura': self._create_thumbnail(row[4]) if row[4] else None
+                    } for row in results]
+                else:
+                    # Versión original sin imágenes
+                    cursor.execute('''
+                        SELECT codigo, timestamp, tamaño_kb, dispositivo
+                        FROM codigos_imagenes 
+                        ORDER BY timestamp DESC 
+                        LIMIT ?
+                    ''', (limit,))
+                    
+                    results = cursor.fetchall()
+                    
+                    return [{
+                        'codigo': row[0],
+                        'timestamp': row[1],
+                        'tamaño_kb': row[2],
+                        'dispositivo': row[3]
+                    } for row in results]
+                    
         except Exception as e:
             self.logger.error(f"Error obteniendo códigos recientes: {e}")
             return []
-    
+
+    def _create_thumbnail(self, imagen_bytes):
+        """Crear miniatura de imagen para vista previa"""
+        try:
+            if not imagen_bytes:
+                return None
+                
+            # Convertir bytes a base64 para miniatura
+            imagen_base64 = base64.b64encode(imagen_bytes).decode('utf-8')
+            imagen_data_url = f"data:image/jpeg;base64,{imagen_base64}"
+            
+            return imagen_data_url
+            
+        except Exception as e:
+            self.logger.debug(f"Error creando miniatura: {e}")
+            return None
+
+
     def get_statistics(self):
         """Obtener estadísticas de la base de datos"""
         try:

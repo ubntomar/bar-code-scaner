@@ -294,10 +294,12 @@ def estadisticas_api():
 
 @app.route('/api/recientes')
 def recientes_api():
-    """API para obtener códigos recientes"""
+    """API para obtener códigos recientes con opción de incluir imágenes"""
     try:
         limit = request.args.get('limit', 20, type=int)
-        recientes = image_db.get_recent_codes(limit)
+        include_images = request.args.get('include_images', 'false').lower() == 'true'
+        
+        recientes = image_db.get_recent_codes(limit, include_images)
         return jsonify(recientes)
         
     except Exception as e:

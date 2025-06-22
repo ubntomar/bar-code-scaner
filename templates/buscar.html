@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
         .search-container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 1rem;
         }
@@ -80,34 +80,91 @@
             margin-top: 2rem;
         }
         
+        /* NUEVOS ESTILOS PARA CÓDIGOS CON MINIATURAS */
         .recent-item {
             background: white;
             border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 0.75rem;
-            margin: 0.5rem 0;
+            border-radius: 12px;
+            padding: 1rem;
+            margin: 0.75rem 0;
             cursor: pointer;
             transition: all 0.3s ease;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            gap: 1rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
         
         .recent-item:hover {
             background: #f0fdf4;
             border-color: #059669;
-            transform: translateY(-1px);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(5, 150, 105, 0.15);
+        }
+        
+        .recent-thumbnail {
+            width: 80px;
+            height: 80px;
+            min-width: 80px;
+            border-radius: 8px;
+            object-fit: cover;
+            border: 2px solid #e2e8f0;
+            background: #f9fafb;
+        }
+        
+        .recent-thumbnail-placeholder {
+            width: 80px;
+            height: 80px;
+            min-width: 80px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: #9ca3af;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .recent-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            min-width: 0;
         }
         
         .recent-code {
             font-family: 'Courier New', monospace;
             font-weight: bold;
             color: #059669;
+            font-size: 1.1rem;
+            word-break: break-all;
+        }
+        
+        .recent-date {
+            font-size: 1rem;
+            color: #374151;
+            font-weight: 500;
         }
         
         .recent-time {
+            font-size: 0.9rem;
+            color: #6b7280;
+        }
+        
+        .recent-meta {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
             font-size: 0.85rem;
             color: #6b7280;
+        }
+        
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
         }
         
         .stats-grid {
@@ -163,6 +220,17 @@
             border-bottom: none;
         }
         
+        .loading-skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
         @media (max-width: 768px) {
             .search-container {
                 padding: 0.5rem;
@@ -178,6 +246,36 @@
             
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .recent-item {
+                flex-direction: column;
+                text-align: center;
+                gap: 0.75rem;
+            }
+            
+            .recent-thumbnail,
+            .recent-thumbnail-placeholder {
+                width: 120px;
+                height: 120px;
+                min-width: 120px;
+            }
+            
+            .recent-content {
+                align-items: center;
+            }
+            
+            .recent-meta {
+                justify-content: center;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .recent-thumbnail,
+            .recent-thumbnail-placeholder {
+                width: 100px;
+                height: 100px;
+                min-width: 100px;
             }
         }
     </style>
@@ -273,10 +371,10 @@
                 </div>
             </div>
 
-            <!-- Códigos recientes -->
+            <!-- Códigos recientes CON MINIATURAS -->
             <div class="recent-codes">
-                <h3>🕒 Códigos Recientes</h3>
-                <p>Haga clic en cualquier código para ver su imagen:</p>
+                <h3>🕒 Códigos Escaneados Recientemente</h3>
+                <p>Haga clic en cualquier código para ver su imagen completa:</p>
                 
                 <div id="recentCodes">
                     <div style="text-align: center; padding: 2rem;">
@@ -287,7 +385,7 @@
                 
                 <div style="text-align: center; margin-top: 1rem;">
                     <button id="refreshRecent" class="btn btn-outline small">
-                        🔄 Actualizar
+                        🔄 Actualizar Lista
                     </button>
                 </div>
             </div>
@@ -307,6 +405,16 @@
         // Variables globales
         let recentCodes = [];
         let searchTimeout = null;
+
+        // Configuración de idioma español
+        const monthNames = [
+            'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+            'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+        ];
+
+        const dayNames = [
+            'Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'
+        ];
 
         // Inicialización
         document.addEventListener('DOMContentLoaded', function() {
@@ -344,6 +452,46 @@
                     hideSuggestions();
                 }
             });
+        }
+
+        function formatDateInSpanish(dateString) {
+            /**
+             * Convierte fecha ISO a formato español legible
+             * Ejemplo: "2025-06-08 19:30:15" -> "Lunes, 8 Junio 2025, 7:30 PM"
+             */
+            try {
+                const date = new Date(dateString);
+                
+                // Verificar que la fecha es válida
+                if (isNaN(date.getTime())) {
+                    return 'Fecha inválida';
+                }
+                
+                const dayName = dayNames[date.getDay()];
+                const day = date.getDate();
+                const monthName = monthNames[date.getMonth()];
+                const year = date.getFullYear();
+                
+                let hours = date.getHours();
+                const minutes = date.getMinutes().toString().padStart(2, '0');
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                
+                // Convertir a formato 12 horas
+                hours = hours % 12;
+                hours = hours ? hours : 12; // 0 debe ser 12
+                
+                return {
+                    fullDate: `${dayName}, ${day} ${monthName} ${year}`,
+                    time: `${hours}:${minutes} ${ampm}`
+                };
+                
+            } catch (error) {
+                console.error('Error formateando fecha:', error);
+                return {
+                    fullDate: 'Fecha no disponible',
+                    time: ''
+                };
+            }
         }
 
         function handleSearchInput() {
@@ -391,9 +539,12 @@
             suggestions.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'suggestion-item';
+                
+                const formatted = formatDateInSpanish(item.timestamp);
+                
                 div.innerHTML = `
                     <div style="font-family: 'Courier New', monospace; font-weight: bold;">${item.codigo}</div>
-                    <div style="font-size: 0.8rem; color: #6b7280;">${new Date(item.timestamp).toLocaleString()}</div>
+                    <div style="font-size: 0.8rem; color: #6b7280;">${formatted.fullDate}, ${formatted.time}</div>
                 `;
                 
                 div.addEventListener('click', () => {
@@ -451,10 +602,12 @@
                 imageResult.style.display = 'block';
                 noResult.style.display = 'none';
                 
+                const formatted = formatDateInSpanish(result.timestamp);
+                
                 document.getElementById('resultCode').textContent = result.codigo;
                 document.getElementById('resultImage').src = result.imagen;
                 document.getElementById('infoCode').textContent = result.codigo;
-                document.getElementById('infoTimestamp').textContent = new Date(result.timestamp).toLocaleString();
+                document.getElementById('infoTimestamp').textContent = `${formatted.fullDate}, ${formatted.time}`;
                 document.getElementById('infoSize').textContent = result.tamaño_kb;
                 document.getElementById('infoDevice').textContent = result.dispositivo;
                 
@@ -494,14 +647,20 @@
         async function loadRecentCodes() {
             const container = document.getElementById('recentCodes');
             
+            // Mostrar skeletons de carga
+            showLoadingSkeleton(container);
+            
             try {
-                const response = await fetch('/api/recientes?limit=10');
+                // Solicitar códigos recientes CON IMÁGENES
+                const response = await fetch('/api/recientes?limit=15&include_images=true');
                 const codes = await response.json();
                 
                 if (codes.length === 0) {
                     container.innerHTML = `
-                        <div style="text-align: center; padding: 2rem; color: #6b7280;">
-                            📭 No hay códigos escaneados aún
+                        <div style="text-align: center; padding: 3rem; color: #6b7280;">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+                            <h3>No hay códigos escaneados aún</h3>
+                            <p>Los códigos aparecerán aquí una vez que empieces a escanear</p>
                         </div>
                     `;
                     return;
@@ -513,9 +672,31 @@
                 codes.forEach(item => {
                     const div = document.createElement('div');
                     div.className = 'recent-item';
+                    
+                    const formatted = formatDateInSpanish(item.timestamp);
+                    
+                    // Crear miniatura o placeholder
+                    const thumbnailHtml = item.imagen_miniatura ? 
+                        `<img src="${item.imagen_miniatura}" alt="Vista previa" class="recent-thumbnail">` :
+                        `<div class="recent-thumbnail-placeholder">📷</div>`;
+                    
                     div.innerHTML = `
-                        <div class="recent-code">${item.codigo}</div>
-                        <div class="recent-time">${new Date(item.timestamp).toLocaleString()}</div>
+                        ${thumbnailHtml}
+                        <div class="recent-content">
+                            <div class="recent-code">${item.codigo}</div>
+                            <div class="recent-date">${formatted.fullDate}</div>
+                            <div class="recent-time">${formatted.time}</div>
+                            <div class="recent-meta">
+                                <div class="meta-item">
+                                    <span>💾</span>
+                                    <span>${item.tamaño_kb} KB</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span>📱</span>
+                                    <span>${item.dispositivo.includes('Móvil') ? 'Móvil' : 'PC'}</span>
+                                </div>
+                            </div>
+                        </div>
                     `;
                     
                     div.addEventListener('click', () => {
@@ -530,9 +711,30 @@
                 console.error('Error cargando códigos recientes:', error);
                 container.innerHTML = `
                     <div style="text-align: center; padding: 2rem; color: #dc2626;">
-                        ❌ Error cargando códigos recientes
+                        <div style="font-size: 2rem; margin-bottom: 1rem;">❌</div>
+                        <h3>Error cargando códigos recientes</h3>
+                        <p>Verifica la conexión e intenta nuevamente</p>
                     </div>
                 `;
+            }
+        }
+
+        function showLoadingSkeleton(container) {
+            container.innerHTML = '';
+            
+            // Crear 5 elementos de carga
+            for (let i = 0; i < 5; i++) {
+                const skeleton = document.createElement('div');
+                skeleton.className = 'recent-item';
+                skeleton.innerHTML = `
+                    <div class="recent-thumbnail-placeholder loading-skeleton"></div>
+                    <div class="recent-content">
+                        <div style="height: 1.5rem; background: #f0f0f0; border-radius: 4px; margin-bottom: 0.5rem;" class="loading-skeleton"></div>
+                        <div style="height: 1rem; background: #f0f0f0; border-radius: 4px; margin-bottom: 0.5rem; width: 70%;" class="loading-skeleton"></div>
+                        <div style="height: 0.875rem; background: #f0f0f0; border-radius: 4px; width: 50%;" class="loading-skeleton"></div>
+                    </div>
+                `;
+                container.appendChild(skeleton);
             }
         }
 
