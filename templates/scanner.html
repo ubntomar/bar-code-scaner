@@ -96,7 +96,6 @@
                 <button id="copyResult" class="btn btn-outline small">📋 Copiar</button>
             </div>
 
-
             <!-- CONTROLES ADICIONALES COMPACTOS -->
             <div class="secondary-controls">
                 <button id="prepareFocus" class="btn btn-outline" style="display: none;">
@@ -115,14 +114,16 @@
                     📁 Subir
                 </button>
                 
+                <a href="/buscar" class="btn btn-outline small">
+                    🔍 Buscar
+                </a>
+                
                 <button id="configToggle" class="btn btn-outline small">
                     ⚙️ Config
                 </button>
             </div>
 
             <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
-
-            
 
             <!-- Configuración (colapsable) -->
             <div class="config-panel" id="configPanel" style="display: none;">
@@ -149,6 +150,10 @@
                         <span>Tap para enfocar</span>
                     </label>
                     <label class="config-item">
+                        <input type="checkbox" id="autoCapture" checked>
+                        <span>Captura automática de imagen</span>
+                    </label>
+                    <label class="config-item">
                         <input type="checkbox" id="showDebug">
                         <span>Información de debug</span>
                     </label>
@@ -165,6 +170,8 @@
                     <div><strong>Autofoque:</strong> <span id="autoFocusStatus">-</span></div>
                     <div><strong>Último enfoque:</strong> <span id="lastFocusTime">-</span></div>
                     <div><strong>Gestión de foco:</strong> <span id="focusManagement">-</span></div>
+                    <div><strong>Base de datos:</strong> <span id="databaseStatus">-</span></div>
+                    <div><strong>Imágenes guardadas:</strong> <span id="totalImages">-</span></div>
                 </div>
             </div>
         </main>
@@ -173,6 +180,7 @@
         <footer class="footer">
             <div class="footer-stats">
                 <span>📊 Escaneados: <strong id="scanCount">0</strong></span>
+                <span>📸 Imágenes: <strong id="imageCount">0</strong></span>
                 <span>🖥️ <span id="serverInfo">Cargando...</span></span>
             </div>
         </footer>
@@ -192,6 +200,7 @@
         let video, canvas, context;
         let stream = null;
         let scanCount = 0;
+        let imageCount = 0;
         let isFlashOn = false;
         let cameraAvailable = false;
         let audioContext = null;
@@ -206,7 +215,8 @@
             showDebug: false,
             playSound: true,
             continuousFocus: true,
-            tapToFocus: true
+            tapToFocus: true,
+            autoCapture: true
         };
 
         // Inicialización
@@ -227,6 +237,9 @@
             
             // Actualizar información de ventanas después de un momento
             setTimeout(updateWindowInfo, 1000);
+            
+            // Cargar estadísticas de base de datos
+            setTimeout(loadDatabaseStats, 1500);
         });
 
         function initializeElements() {
@@ -365,6 +378,7 @@
             document.getElementById('playSound').addEventListener('change', updateConfig);
             document.getElementById('continuousFocus').addEventListener('change', updateConfig);
             document.getElementById('tapToFocus').addEventListener('change', updateConfig);
+            document.getElementById('autoCapture').addEventListener('change', updateConfig);
             document.getElementById('showDebug').addEventListener('change', toggleDebug);
             
             // Eventos de video
@@ -733,6 +747,22 @@
             }
         }
 
+        async function loadDatabaseStats() {
+            try {
+                const response = await fetch('/api/estadisticas');
+                const stats = await response.json();
+                
+                document.getElementById('databaseStatus').textContent = 'Activa';
+                document.getElementById('totalImages').textContent = stats.total_codes || 0;
+                document.getElementById('imageCount').textContent = stats.total_codes || 0;
+                
+            } catch (error) {
+                document.getElementById('databaseStatus').textContent = 'Error';
+                document.getElementById('totalImages').textContent = 'N/A';
+                console.debug('Error cargando estadísticas:', error);
+            }
+        }
+
         async function scanBarcode() {
             // LIMPIAR resultados anteriores al iniciar nuevo escaneo
             clearResults();
@@ -798,6 +828,11 @@
                     document.getElementById('scanCount').textContent = scanCount;
                     showToast(`✅ ${result.message}`, 'success');
                     
+                    // NUEVA FUNCIONALIDAD: Conteo regresivo y captura automática
+                    if (config.autoCapture && video.style.display !== 'none' && video.videoWidth) {
+                        startCountdownAndCapture(barcode.data);
+                    }
+                    
                     // Actualizar información de ventanas después del escaneo
                     setTimeout(updateWindowInfo, 1000);
                 } else {
@@ -834,6 +869,202 @@
             document.getElementById('results').style.display = 'block';
         }
 
+        function startCountdownAndCapture(codigo) {
+            // Crear overlay de conteo regresivo
+            const countdownOverlay = createCountdownOverlay();
+            document.body.appendChild(countdownOverlay);
+            
+            let countdown = 2;
+            const countdownElement = countdownOverlay.querySelector('.countdown-number');
+            const messageElement = countdownOverlay.querySelector('.countdown-message');
+            
+            // Actualizar conteo inicial
+            countdownElement.textContent = countdown;
+            messageElement.textContent = 'Preparando captura automática...';
+            
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                
+                if (countdown > 0) {
+                    countdownElement.textContent = countdown;
+                    messageElement.textContent = `Capturando imagen en ${countdown}...`;
+                    
+                    // Efecto de pulso en la cámara
+                    document.getElementById('cameraContainer').style.borderColor = '#10b981';
+                    setTimeout(() => {
+                        document.getElementById('cameraContainer').style.borderColor = '#059669';
+                    }, 500);
+                    
+                } else {
+                    clearInterval(countdownInterval);
+                    
+                    // Cambiar mensaje
+                    countdownElement.textContent = '📸';
+                    messageElement.textContent = 'Capturando imagen...';
+                    
+                    // Capturar imagen después de una breve pausa
+                    setTimeout(() => {
+                        captureAndSaveImage(codigo);
+                        
+                        // Remover overlay
+                        setTimeout(() => {
+                            if (countdownOverlay.parentNode) {
+                                countdownOverlay.parentNode.removeChild(countdownOverlay);
+                            }
+                        }, 1000);
+                        
+                    }, 300);
+                }
+            }, 1000);
+        }
+
+        function createCountdownOverlay() {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+                color: white;
+                text-align: center;
+            `;
+            
+            overlay.innerHTML = `
+                <div class="countdown-number" style="
+                    font-size: 8rem;
+                    font-weight: bold;
+                    color: #10b981;
+                    text-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+                    animation: pulse 1s infinite;
+                    margin-bottom: 1rem;
+                ">2</div>
+                
+                <div class="countdown-message" style="
+                    font-size: 1.5rem;
+                    font-weight: 500;
+                    margin-bottom: 2rem;
+                ">Preparando captura automática...</div>
+                
+                <div style="
+                    width: 60px;
+                    height: 60px;
+                    border: 4px solid rgba(16, 185, 129, 0.3);
+                    border-top: 4px solid #10b981;
+                    border-radius: 50%;
+                    animation: spin 2s linear infinite;
+                "></div>
+                
+                <div style="
+                    margin-top: 1rem;
+                    font-size: 1rem;
+                    opacity: 0.8;
+                ">📸 Sistema de imágenes activo</div>
+            `;
+            
+            return overlay;
+        }
+
+        async function captureAndSaveImage(codigo) {
+            try {
+                // Crear flash visual para indicar captura
+                createCaptureFlash();
+                
+                // Asegurar que el canvas tenga el tamaño correcto
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                // Capturar frame actual del video en resolución media
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // Convertir a base64 con calidad optimizada para resolución media
+                const imageData = canvas.toDataURL('image/jpeg', 0.7);
+                
+                // Enviar al servidor
+                const response = await fetch('/guardar-imagen', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        codigo: codigo,
+                        imagen: imageData,
+                        dispositivo: `Scanner Web - ${navigator.userAgent.includes('Mobile') ? 'Móvil' : 'Escritorio'}`
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast('📸 Imagen guardada automáticamente', 'success');
+                    console.log(`✅ Imagen guardada para código: ${codigo}`);
+                    
+                    // Actualizar contador de imágenes
+                    imageCount++;
+                    document.getElementById('imageCount').textContent = imageCount;
+                    
+                    // Actualizar estadísticas
+                    setTimeout(loadDatabaseStats, 1000);
+                } else {
+                    showToast('⚠️ Error guardando imagen', 'warning');
+                    console.error('Error guardando imagen:', result.error);
+                }
+
+            } catch (error) {
+                console.error('Error en captura automática:', error);
+                showToast('❌ Error en captura automática', 'error');
+            }
+        }
+
+        function createCaptureFlash() {
+            // Crear efecto de flash blanco para simular flash de cámara
+            const flash = document.createElement('div');
+            flash.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: white;
+                z-index: 999;
+                opacity: 0;
+                pointer-events: none;
+                animation: camera-flash 0.3s ease-out;
+            `;
+            
+            // Agregar animación CSS si no existe
+            if (!document.querySelector('#flash-animation-style')) {
+                const style = document.createElement('style');
+                style.id = 'flash-animation-style';
+                style.textContent = `
+                    @keyframes camera-flash {
+                        0% { opacity: 0; }
+                        50% { opacity: 0.8; }
+                        100% { opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            document.body.appendChild(flash);
+            
+            // Remover flash después de la animación
+            setTimeout(() => {
+                if (flash.parentNode) {
+                    flash.parentNode.removeChild(flash);
+                }
+            }, 300);
+            
+            // Efecto de sonido de cámara
+            playBeepSound(); // Reutilizar el sonido de éxito
+        }
+
         async function copyResult() {
             try {
                 const resultCode = document.getElementById('resultCode').textContent;
@@ -861,6 +1092,7 @@
             config.playSound = document.getElementById('playSound').checked;
             config.continuousFocus = document.getElementById('continuousFocus').checked;
             config.tapToFocus = document.getElementById('tapToFocus').checked;
+            config.autoCapture = document.getElementById('autoCapture').checked;
             
             fetch('/config', {
                 method: 'POST',
@@ -903,6 +1135,13 @@
                     document.getElementById('focusManagement').textContent = 'No disponible';
                 }
                 
+                // Actualizar estadísticas de base de datos
+                if (data.database_stats) {
+                    document.getElementById('databaseStatus').textContent = 'Activa';
+                    document.getElementById('totalImages').textContent = data.database_stats.total_codes || 0;
+                    document.getElementById('imageCount').textContent = data.database_stats.total_codes || 0;
+                }
+                
             } catch (error) {
                 updateStatus('offline', 'Desconectado');
                 console.error('Error conectando al servidor:', error);
@@ -927,8 +1166,9 @@
             }, 3000);
         }
 
-        // Auto-reconexión
+        // Auto-reconexión y actualización de estadísticas
         setInterval(checkServerStatus, 30000);
+        setInterval(loadDatabaseStats, 60000); // Actualizar estadísticas cada minuto
     </script>
 </body>
-</html>9789585407121
+</html>

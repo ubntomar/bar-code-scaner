@@ -2,6 +2,7 @@
 """
 Scanner Server HTTPS - Servidor seguro SOLO HTTPS para acceso completo a cámara móvil
 Compatible con Ubuntu y Windows - Con gestión inteligente de foco de ventanas
+NUEVA FUNCIONALIDAD: Sistema de códigos con imágenes asociadas
 """
 
 from flask import Flask, render_template, request, jsonify
@@ -18,12 +19,14 @@ from datetime import datetime, timedelta
 # Importar módulos locales
 from scanner import BarcodeScanner
 from keyboard_sim import KeyboardSimulator
+from database import ImageDatabase
 
 app = Flask(__name__)
 
 # Inicializar componentes
 scanner = BarcodeScanner()
 keyboard = KeyboardSimulator()
+image_db = ImageDatabase()
 
 # Configuración
 CONFIG = {
@@ -226,6 +229,92 @@ def scan_barcode():
         print(f"Error al procesar imagen: {str(e)}")
         return jsonify({'error': f'Error al procesar imagen: {str(e)}'}), 500
 
+@app.route('/guardar-imagen', methods=['POST'])
+def guardar_imagen():
+    """Endpoint para guardar imagen asociada a código"""
+    try:
+        data = request.get_json()
+        
+        if 'codigo' not in data or 'imagen' not in data:
+            return jsonify({'error': 'Faltan datos: código e imagen requeridos'}), 400
+        
+        codigo = data['codigo']
+        imagen_base64 = data['imagen']
+        dispositivo = data.get('dispositivo', 'Scanner Web')
+        
+        # Guardar en base de datos
+        success = image_db.save_image(codigo, imagen_base64, dispositivo)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Imagen guardada para código: {codigo}',
+                'codigo': codigo
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Error guardando imagen en base de datos'
+            }), 500
+            
+    except Exception as e:
+        print(f"Error guardando imagen: {str(e)}")
+        return jsonify({'error': f'Error guardando imagen: {str(e)}'}), 500
+
+@app.route('/buscar')
+def buscar_page():
+    """Página de búsqueda de imágenes por código"""
+    return render_template('buscar.html')
+
+@app.route('/api/buscar/<codigo>')
+def buscar_imagen_api(codigo):
+    """API para buscar imagen por código"""
+    try:
+        resultado = image_db.get_image(codigo)
+        return jsonify(resultado)
+        
+    except Exception as e:
+        print(f"Error buscando imagen para {codigo}: {str(e)}")
+        return jsonify({
+            'codigo': codigo,
+            'encontrada': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/estadisticas')
+def estadisticas_api():
+    """API para obtener estadísticas de la base de datos"""
+    try:
+        stats = image_db.get_statistics()
+        return jsonify(stats)
+        
+    except Exception as e:
+        print(f"Error obteniendo estadísticas: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/recientes')
+def recientes_api():
+    """API para obtener códigos recientes"""
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        recientes = image_db.get_recent_codes(limit)
+        return jsonify(recientes)
+        
+    except Exception as e:
+        print(f"Error obteniendo códigos recientes: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/buscar-coincidencias/<search_term>')
+def buscar_coincidencias_api(search_term):
+    """API para buscar códigos que contengan el término"""
+    try:
+        resultados = image_db.search_codes(search_term)
+        return jsonify(resultados)
+        
+    except Exception as e:
+        print(f"Error buscando coincidencias para '{search_term}': {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/config', methods=['GET', 'POST'])
 def config():
     """Endpoint para configuración del servidor"""
@@ -242,13 +331,15 @@ def config():
 @app.route('/status')
 def status():
     """Estado del servidor"""
+    db_stats = image_db.get_statistics()
     return jsonify({
         'status': 'running',
         'scanner_ready': scanner.is_ready(),
         'keyboard_ready': keyboard.is_ready(),
         'server_type': 'HTTPS only',
         'config': CONFIG,
-        'keyboard_status': keyboard.get_status()
+        'keyboard_status': keyboard.get_status(),
+        'database_stats': db_stats
     })
 
 @app.route('/prepare-focus', methods=['POST'])
@@ -319,6 +410,12 @@ def install_certificate_instructions(cert_path, local_ip, https_port):
    - El sistema recordará automáticamente dónde tienes el cursor
    - Los códigos se escribirán en tu editor, no en Firefox
    - También puedes usar el botón "🎯 Preparar Foco" manualmente
+
+📸  NUEVA FUNCIÓN - SISTEMA DE IMÁGENES:
+   - Conteo regresivo de 2 segundos tras escaneo exitoso
+   - Captura automática de imagen asociada al código
+   - Búsqueda instantánea desde cualquier PC en /buscar
+   - Base de datos SQLite local para almacenamiento
 """)
     print("="*60)
 
@@ -334,11 +431,13 @@ def run_https_server():
         print("💡 Solución: Ejecuta primero ./setup_https.sh")
         return
     
-    print("🚀 SCANNER SERVER HTTPS CON GESTIÓN DE FOCO INICIADO")
-    print("="*60)
+    print("🚀 SCANNER SERVER HTTPS CON GESTIÓN DE FOCO E IMÁGENES INICIADO")
+    print("="*70)
     print(f"🔒 URL del servidor: https://{local_ip}:{CONFIG['https_port']}")
+    print(f"🔍 URL de búsqueda: https://{local_ip}:{CONFIG['https_port']}/buscar")
     print("🎯 Nueva función: Gestión inteligente de foco de ventanas")
-    print("="*60)
+    print("📸 Nueva función: Sistema de códigos con imágenes asociadas")
+    print("="*70)
     
     # Mostrar instrucciones
     install_certificate_instructions(cert_path, local_ip, CONFIG['https_port'])
@@ -350,8 +449,10 @@ def run_https_server():
         
         print("✅ Certificados SSL cargados correctamente")
         print("🎯 Sistema de foco inteligente activado")
+        print("📸 Sistema de imágenes inicializado")
         print("🌐 Servidor iniciando...")
         print(f"📱 Accede desde tu móvil: https://{local_ip}:{CONFIG['https_port']}")
+        print(f"🔍 Búsqueda de imágenes: https://{local_ip}:{CONFIG['https_port']}/buscar")
         print("\n⏹️  Presiona Ctrl+C para detener")
         
         app.run(

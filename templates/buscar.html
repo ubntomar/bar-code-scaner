@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner Server - Búsqueda de Imágenes</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .search-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        
+        .search-box {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 2px solid #059669;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(5, 150, 105, 0.2);
+        }
+        
+        .search-input {
+            width: 100%;
+            max-width: 400px;
+            padding: 1rem;
+            font-size: 1.2rem;
+            border: 2px solid #d1d5db;
+            border-radius: 8px;
+            margin: 1rem 0;
+            text-align: center;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #059669;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+        }
+        
+        .result-container {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .result-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            margin: 1rem 0;
+        }
+        
+        .result-info {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .no-result {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            color: #dc2626;
+        }
+        
+        .recent-codes {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .recent-item {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin: 0.5rem 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .recent-item:hover {
+            background: #f0fdf4;
+            border-color: #059669;
+            transform: translateY(-1px);
+        }
+        
+        .recent-code {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            color: #059669;
+        }
+        
+        .recent-time {
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .stat-item {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #059669;
+        }
+        
+        .stat-label {
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
+        
+        .search-suggestions {
+            display: none;
+            background: white;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            max-width: 400px;
+            margin: 0 auto;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .suggestion-item {
+            padding: 0.75rem;
+            cursor: pointer;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .suggestion-item:hover {
+            background: #f0fdf4;
+        }
+        
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+        
+        @media (max-width: 768px) {
+            .search-container {
+                padding: 0.5rem;
+            }
+            
+            .search-box {
+                padding: 1.5rem;
+            }
+            
+            .result-container {
+                padding: 1.5rem;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🔍 Búsqueda de Imágenes</h1>
+            <div class="status">
+                <span class="status-dot online"></span>
+                <span>Sistema de códigos activo</span>
+            </div>
+        </header>
+
+        <div class="search-container">
+            <!-- Caja de búsqueda principal -->
+            <div class="search-box">
+                <h2>Buscar imagen por código</h2>
+                <p>Ingrese el código de barras para ver la imagen asociada</p>
+                
+                <div style="position: relative;">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        class="search-input" 
+                        placeholder="Ej: 1234567890"
+                        autocomplete="off"
+                    >
+                    
+                    <!-- Sugerencias de búsqueda -->
+                    <div id="searchSuggestions" class="search-suggestions"></div>
+                </div>
+                
+                <div style="margin-top: 1rem;">
+                    <button id="searchBtn" class="btn btn-success large">
+                        🔍 Buscar Imagen
+                    </button>
+                    
+                    <button id="clearBtn" class="btn btn-outline" style="margin-left: 1rem;">
+                        🗑️ Limpiar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Resultado de búsqueda -->
+            <div id="resultContainer" style="display: none;">
+                <!-- Imagen encontrada -->
+                <div id="imageResult" class="result-container" style="display: none;">
+                    <h3>✅ Imagen encontrada:</h3>
+                    <div style="text-align: center;">
+                        <div class="result-code" id="resultCode" style="margin-bottom: 1rem;"></div>
+                        <img id="resultImage" class="result-image" alt="Imagen del código">
+                        
+                        <div class="result-info">
+                            <div><strong>Código:</strong> <span id="infoCode"></span></div>
+                            <div><strong>Guardado:</strong> <span id="infoTimestamp"></span></div>
+                            <div><strong>Tamaño:</strong> <span id="infoSize"></span> KB</div>
+                            <div><strong>Dispositivo:</strong> <span id="infoDevice"></span></div>
+                        </div>
+                        
+                        <button id="copyCodeBtn" class="btn btn-outline" style="margin-top: 1rem;">
+                            📋 Copiar Código
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sin resultado -->
+                <div id="noResult" class="no-result" style="display: none;">
+                    <h3>❌ No se encontró imagen</h3>
+                    <p>No hay ninguna imagen asociada al código: <strong id="noResultCode"></strong></p>
+                    <p>Verifique que el código sea correcto o que ya haya sido escaneado.</p>
+                </div>
+            </div>
+
+            <!-- Navegación -->
+            <div style="text-align: center; margin: 2rem 0;">
+                <a href="/" class="btn btn-primary">
+                    📱 Volver al Scanner
+                </a>
+                
+                <button id="toggleStats" class="btn btn-outline">
+                    📊 Ver Estadísticas
+                </button>
+            </div>
+
+            <!-- Estadísticas -->
+            <div id="statsContainer" class="recent-codes" style="display: none;">
+                <h3>📊 Estadísticas del Sistema</h3>
+                
+                <div class="stats-grid" id="statsGrid">
+                    <!-- Las estadísticas se cargan dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Códigos recientes -->
+            <div class="recent-codes">
+                <h3>🕒 Códigos Recientes</h3>
+                <p>Haga clic en cualquier código para ver su imagen:</p>
+                
+                <div id="recentCodes">
+                    <div style="text-align: center; padding: 2rem;">
+                        <div class="spinner"></div>
+                        <p>Cargando códigos recientes...</p>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 1rem;">
+                    <button id="refreshRecent" class="btn btn-outline small">
+                        🔄 Actualizar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div class="loading" id="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p>Buscando imagen...</p>
+    </div>
+
+    <!-- Toast notifications -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // Variables globales
+        let recentCodes = [];
+        let searchTimeout = null;
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            loadRecentCodes();
+            loadStatistics();
+            
+            // Enfocar el campo de búsqueda
+            document.getElementById('searchInput').focus();
+        });
+
+        function setupEventListeners() {
+            // Búsqueda
+            document.getElementById('searchBtn').addEventListener('click', searchImage);
+            document.getElementById('clearBtn').addEventListener('click', clearSearch);
+            document.getElementById('searchInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchImage();
+                }
+            });
+            
+            // Búsqueda en tiempo real con sugerencias
+            document.getElementById('searchInput').addEventListener('input', handleSearchInput);
+            
+            // Estadísticas
+            document.getElementById('toggleStats').addEventListener('click', toggleStats);
+            document.getElementById('refreshRecent').addEventListener('click', loadRecentCodes);
+            
+            // Copiar código
+            document.getElementById('copyCodeBtn').addEventListener('click', copyCode);
+            
+            // Ocultar sugerencias al hacer clic fuera
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('#searchInput') && !e.target.closest('#searchSuggestions')) {
+                    hideSuggestions();
+                }
+            });
+        }
+
+        function handleSearchInput() {
+            const input = document.getElementById('searchInput');
+            const query = input.value.trim();
+            
+            // Limpiar timeout anterior
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            
+            if (query.length >= 2) {
+                // Buscar sugerencias después de una pausa
+                searchTimeout = setTimeout(() => {
+                    searchSuggestions(query);
+                }, 300);
+            } else {
+                hideSuggestions();
+            }
+        }
+
+        async function searchSuggestions(query) {
+            try {
+                const response = await fetch(`/api/buscar-coincidencias/${encodeURIComponent(query)}`);
+                const suggestions = await response.json();
+                
+                showSuggestions(suggestions.slice(0, 5)); // Máximo 5 sugerencias
+                
+            } catch (error) {
+                console.error('Error obteniendo sugerencias:', error);
+                hideSuggestions();
+            }
+        }
+
+        function showSuggestions(suggestions) {
+            const container = document.getElementById('searchSuggestions');
+            
+            if (suggestions.length === 0) {
+                hideSuggestions();
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            suggestions.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                div.innerHTML = `
+                    <div style="font-family: 'Courier New', monospace; font-weight: bold;">${item.codigo}</div>
+                    <div style="font-size: 0.8rem; color: #6b7280;">${new Date(item.timestamp).toLocaleString()}</div>
+                `;
+                
+                div.addEventListener('click', () => {
+                    document.getElementById('searchInput').value = item.codigo;
+                    hideSuggestions();
+                    searchImage();
+                });
+                
+                container.appendChild(div);
+            });
+            
+            container.style.display = 'block';
+        }
+
+        function hideSuggestions() {
+            document.getElementById('searchSuggestions').style.display = 'none';
+        }
+
+        async function searchImage() {
+            const codigo = document.getElementById('searchInput').value.trim();
+            
+            if (!codigo) {
+                showToast('⚠️ Ingrese un código para buscar', 'warning');
+                return;
+            }
+            
+            // Ocultar sugerencias
+            hideSuggestions();
+            
+            document.getElementById('loading').style.display = 'flex';
+            
+            try {
+                const response = await fetch(`/api/buscar/${encodeURIComponent(codigo)}`);
+                const result = await response.json();
+                
+                showSearchResult(result);
+                
+            } catch (error) {
+                console.error('Error buscando imagen:', error);
+                showToast('❌ Error buscando imagen', 'error');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function showSearchResult(result) {
+            const resultContainer = document.getElementById('resultContainer');
+            const imageResult = document.getElementById('imageResult');
+            const noResult = document.getElementById('noResult');
+            
+            resultContainer.style.display = 'block';
+            
+            if (result.encontrada) {
+                // Mostrar imagen encontrada
+                imageResult.style.display = 'block';
+                noResult.style.display = 'none';
+                
+                document.getElementById('resultCode').textContent = result.codigo;
+                document.getElementById('resultImage').src = result.imagen;
+                document.getElementById('infoCode').textContent = result.codigo;
+                document.getElementById('infoTimestamp').textContent = new Date(result.timestamp).toLocaleString();
+                document.getElementById('infoSize').textContent = result.tamaño_kb;
+                document.getElementById('infoDevice').textContent = result.dispositivo;
+                
+                showToast('✅ Imagen encontrada', 'success');
+                
+                // Scroll a resultado
+                resultContainer.scrollIntoView({ behavior: 'smooth' });
+                
+            } else {
+                // No se encontró imagen
+                imageResult.style.display = 'none';
+                noResult.style.display = 'block';
+                
+                document.getElementById('noResultCode').textContent = result.codigo;
+                
+                showToast('❌ No se encontró imagen para este código', 'warning');
+            }
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('resultContainer').style.display = 'none';
+            hideSuggestions();
+            document.getElementById('searchInput').focus();
+        }
+
+        async function copyCode() {
+            try {
+                const code = document.getElementById('infoCode').textContent;
+                await navigator.clipboard.writeText(code);
+                showToast('📋 Código copiado al portapapeles', 'success');
+            } catch (error) {
+                showToast('❌ Error copiando código', 'error');
+            }
+        }
+
+        async function loadRecentCodes() {
+            const container = document.getElementById('recentCodes');
+            
+            try {
+                const response = await fetch('/api/recientes?limit=10');
+                const codes = await response.json();
+                
+                if (codes.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: #6b7280;">
+                            📭 No hay códigos escaneados aún
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = '';
+                recentCodes = codes;
+                
+                codes.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'recent-item';
+                    div.innerHTML = `
+                        <div class="recent-code">${item.codigo}</div>
+                        <div class="recent-time">${new Date(item.timestamp).toLocaleString()}</div>
+                    `;
+                    
+                    div.addEventListener('click', () => {
+                        document.getElementById('searchInput').value = item.codigo;
+                        searchImage();
+                    });
+                    
+                    container.appendChild(div);
+                });
+                
+            } catch (error) {
+                console.error('Error cargando códigos recientes:', error);
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 2rem; color: #dc2626;">
+                        ❌ Error cargando códigos recientes
+                    </div>
+                `;
+            }
+        }
+
+        async function loadStatistics() {
+            try {
+                const response = await fetch('/api/estadisticas');
+                const stats = await response.json();
+                
+                const statsGrid = document.getElementById('statsGrid');
+                statsGrid.innerHTML = `
+                    <div class="stat-item">
+                        <div class="stat-value">${stats.total_codes}</div>
+                        <div class="stat-label">Códigos</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${stats.total_size_mb}</div>
+                        <div class="stat-label">MB Usados</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${stats.db_file_size_mb}</div>
+                        <div class="stat-label">MB Base Datos</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${stats.last_code !== 'N/A' ? stats.last_code.substring(0, 8) + '...' : 'N/A'}</div>
+                        <div class="stat-label">Último Código</div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('Error cargando estadísticas:', error);
+            }
+        }
+
+        function toggleStats() {
+            const container = document.getElementById('statsContainer');
+            const isVisible = container.style.display !== 'none';
+            
+            container.style.display = isVisible ? 'none' : 'block';
+            
+            if (!isVisible) {
+                loadStatistics();
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast show ${type}`;
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Auto-actualizar códigos recientes cada 30 segundos
+        setInterval(loadRecentCodes, 30000);
+    </script>
+</body>
+</html>
