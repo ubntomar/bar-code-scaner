@@ -1,9 +1,24 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Scanner Server HTTPS - Servidor seguro SOLO HTTPS para acceso completo a cámara móvil
 Compatible con Ubuntu y Windows - Con gestión inteligente de foco de ventanas
 NUEVA FUNCIONALIDAD: Sistema de códigos con imágenes asociadas
 """
+
+import os
+import sys
+
+# Configurar codificación UTF-8 para evitar errores en arranque automático
+if os.name == 'nt':  # Windows
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
+# Importar módulos locales
+from scanner import BarcodeScanner
+from keyboard_sim import KeyboardSimulator
+from database import ImageDatabase
 
 from flask import Flask, render_template, request, jsonify
 import base64
@@ -16,17 +31,21 @@ import ssl
 import os
 from datetime import datetime, timedelta
 
-# Importar módulos locales
-from scanner import BarcodeScanner
-from keyboard_sim import KeyboardSimulator
-from database import ImageDatabase
-
 app = Flask(__name__)
 
 # Inicializar componentes
 scanner = BarcodeScanner()
 keyboard = KeyboardSimulator()
 image_db = ImageDatabase()
+
+def safe_print(message):
+    """Función auxiliar para imprimir mensajes de forma segura en cualquier codificación"""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        # Si hay error de codificación, reemplazar emojis con texto
+        safe_message = message.encode('ascii', errors='replace').decode('ascii')
+        print(safe_message)
 
 # Configuración
 CONFIG = {
@@ -46,7 +65,7 @@ def create_self_signed_cert():
         from cryptography.hazmat.primitives.asymmetric import rsa
         import ipaddress
         
-        print("🔐 Creando certificado SSL autofirmado...")
+        safe_print("🔐 Creando certificado SSL autofirmado...")
         
         # Generar clave privada
         private_key = rsa.generate_private_key(
@@ -114,7 +133,7 @@ def create_self_signed_cert():
         print("⚠️ cryptography no instalada. Usando certificado básico...")
         return create_basic_cert()
     except Exception as e:
-        print(f"❌ Error creando certificado: {e}")
+        safe_print(f"❌ Error creando certificado: {e}")
         return create_basic_cert()
 
 def create_basic_cert():
@@ -142,11 +161,11 @@ openssl req -x509 -newkey rsa:4096 -keyout {key_path} -out {cert_path} \
             print("✅ Certificado creado con OpenSSL")
             return cert_path, key_path
         else:
-            print(f"❌ Error con OpenSSL: {result.stderr}")
+            safe_print(f"❌ Error con OpenSSL: {result.stderr}")
             return None, None
             
     except Exception as e:
-        print(f"❌ Error creando certificado básico: {e}")
+        safe_print(f"❌ Error creando certificado básico: {e}")
         return None, None
 
 def get_local_ip():
@@ -466,7 +485,7 @@ def run_https_server():
         )
         
     except Exception as e:
-        print(f"\n❌ Error iniciando servidor HTTPS: {e}")
+        safe_print(f"\n❌ Error iniciando servidor HTTPS: {e}")
         print("💡 Verifica que el puerto 5443 esté libre")
 
 if __name__ == '__main__':
@@ -475,7 +494,7 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("\n👋 Cerrando servidor HTTPS...")
     except Exception as e:
-        print(f"\n❌ Error ejecutando servidor: {e}")
+        safe_print(f"\n❌ Error ejecutando servidor: {e}")
         print("💡 Verifica:")
         print("   1. Que los certificados SSL estén creados")
         print("   2. Que el puerto 5443 esté libre")

@@ -12,6 +12,40 @@
             padding: 1rem;
         }
         
+        /* Estilo para el botón de regreso */
+        .back-button-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 1rem;
+            padding-bottom: 0;
+        }
+        
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 2px solid #059669;
+            color: #059669;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(5, 150, 105, 0.1);
+        }
+        
+        .back-button:hover {
+            background: #059669;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(5, 150, 105, 0.2);
+        }
+        
+        .back-button:active {
+            transform: translateY(0);
+        }
+        
         .search-box {
             background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
             border: 2px solid #059669;
@@ -290,6 +324,13 @@
                 <span>Sistema de códigos activo</span>
             </div>
         </header>
+
+        <!-- Botón de regreso al scanner -->
+        <div class="back-button-container">
+            <a href="/" class="back-button">
+                ← 📱 Volver al Scanner
+            </a>
+        </div>
 
         <div class="search-container">
             <!-- Caja de búsqueda principal -->
